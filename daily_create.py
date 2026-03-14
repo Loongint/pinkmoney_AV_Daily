@@ -260,7 +260,9 @@ def generate_post_text(
         f"— {sentence}\n"
         f"\n"
         f"glsl → {glsl_url}\n"
-        f"sc   → {sc_url}"
+        f"sc   → {sc_url}\n"
+        f"\n"
+        f"#generativeart #glsl #supercollider #audiovisual #shader"
     )
 
     post_path = Path(glsl_path).parent / "post.txt"
@@ -355,8 +357,12 @@ def post_weibo(mp4_path, text):
         log("STEP - 微博跳过", f"session 文件不存在: {session_file}")
         return ""
     try:
+        title = text.split("\n")[0] if "\n" in text else text[:30]
         result = subprocess.run(
-            ["python3", str(WORKSPACE / "post_weibo.py"), "--video", str(mp4_path), "--text", text],
+            ["python3", str(WORKSPACE / "post_weibo.py"),
+             "--video", str(mp4_path),
+             "--title", title,
+             "--text", text],
             capture_output=True, text=True, timeout=300
         )
         url = ""
@@ -403,10 +409,20 @@ def post_weibo(mp4_path, text):
     ig_caption = post_text + "\n\n#glsl #supercollider #audiovisual #livecoding #generativeart #shaderart"
     ig_url = post_instagram(mp4_path, ig_caption)
 
-    # 微博发布
-    gh_base = f"https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/{DATE}"
+    # 微博发布 — 标准模板
+    theme_zh = theme.split(" / ")[0] if " / " in theme else theme
+    theme_en = theme.split(" / ")[1] if " / " in theme else theme
+    gh_base  = f"https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/{DATE}"
+    # 从 post.txt 拿一句话（第二行），或用 theme_note 首句
+    post_txt_path = OUT_DIR / "post.txt"
+    if post_txt_path.exists():
+        lines = post_txt_path.read_text().splitlines()
+        one_line = lines[1].lstrip("— ").strip() if len(lines) > 1 else ""
+    else:
+        one_line = ""
     weibo_text = (
-        f"{theme}\n\n"
+        f"{theme_zh} / {theme_en}\n\n"
+        f"{one_line}\n\n"
         f"glsl → {gh_base}/{DATE}.frag\n"
         f"sc   → {gh_base}/{DATE}.scd\n\n"
         f"#generativeart #glsl #supercollider #audiovisual #shader"
