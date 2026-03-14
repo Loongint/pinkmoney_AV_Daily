@@ -8,10 +8,21 @@ WORKSPACE    = Path("/home/pinkmoney/.openclaw/workspace")
 RENDER_PY    = WORKSPACE / "pinkmoney_render.py"
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
+TG_BOT_TOKEN = "8627190890:AAG5jJ8WjlaFdVJnWbgAFzB98GUoi4mQQ04"
+TG_CHAT_ID   = "5390091587"
 
 DATE    = datetime.now().strftime("%Y-%m-%d")
 OUT_DIR = WORKSPACE / DATE
 LOG     = OUT_DIR / "run.log"
+
+def notify(text):
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
+            json={"chat_id": TG_CHAT_ID, "text": f"💜 pink;money\n{text}"},
+            timeout=10)
+    except Exception:
+        pass
 
 def log(step, content):
     ts    = datetime.now().strftime("%H:%M:%S")
@@ -20,6 +31,7 @@ def log(step, content):
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     with open(LOG, "a") as f:
         f.write(entry)
+    notify(f"[{ts}] {step}\n{content}")
 
 def render_audio(osc_path, wav_path, duration=30):
     log("STEP - 音频渲染", f"scsynth NRT  osc={osc_path}")
