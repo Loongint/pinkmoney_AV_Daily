@@ -9,33 +9,45 @@
 全流程：
 
 ## STEP 1 — 信息收集
-用 web_search 搜索以下内容，每项独立搜索：
-1. 今日 [日期] 节日 纪念日 历史上的今天
-2. 今日月相 天气 大气状态
-3. 今日重要世界事件 集体情绪
+调用 daily_create.py 中的 gather_world_signals()，自动用 Tavily 搜索以下维度：
 
-将收集到的内容提炼为四项（内部使用）：
-- world_mood（世界情绪底色）
-- symbolic_tension（象征张力）
-- visual_clues（视觉线索）
-- sound_energy_clues（声音能量线索）
+**新闻（10条跨领域）**：政治 / 科技 / 经济 / 环境
 
-同时读取 memory/ 目录下最近 1-2 天的日志，提炼用户状态为五项：
+**文化艺术（独立搜索）**：音乐 / 电影 / 展览 / 演出
+
+**历史节日（5条+）**：今日纪念日 / 国际节日 / 历史事件
+
+**神秘玄学（五个角度）**：
+1. 道教 — 节气 / 农历 / 宜忌
+2. 佛教 — 月相 / 节日意义
+3. 天主教 — 圣徒纪念日 / 礼仪历
+4. 占星 — 太阳/月亮星座 / 行星过境
+5. 塔罗 — 当日牌能量
+
+**用户状态**：自动读取 memory/YYYY-MM-DD.md，提炼：
 - emotional_tone / energy_level / desire_vector / consciousness_texture / recurring_images
 
 ## STEP 2 — 主题生成
-⚠️ 严格按照 references/theme_methodology.md 执行。
+⚠️ 严格按照以下风格规范执行。
 
-先在内部确定四项交汇点：
-- world_mood / self_mood / shared_image / formal_tension
+**内部综合**（不对外输出）：
+找到所有信号的最强共振点——不是主题的罗列，而是一个点能把多个维度串起来。
 
-然后生成双语标题，格式：
+**命名风格规范**（参考 pinkmoney.studio 作品名）：
+- 汉字：2-4字，简洁有力，不解释，只命名
+- 英文：技术感 / 拉丁感 / 当代艺术馆标签质感，与中文不互译而是互补
+- 可用：下划线 / 希腊字母 / 数字后缀 / 破折号
+- 禁止：大白话描述、解释性句子、"今日"/"当下"/"临界"等词
+- 参考：爆鸣的余烬 / Vanishing_Continuation_α / 撕 裂 / 消散前的振型 / 渗 线
+
+**输出格式**：
 ```
 中文：<标题>
 English: <标题>
-Theme note: <紧凑英文制作提示>
+Theme note: <紧凑英文制作提示，给 GLSL 和 SC 用>
 ```
 
+自检：① 与今日强相关 ② 有用户状态痕迹 ③ 像作品名不像描述 ④ 中英互文不互译
 自检通过后才写入 run.log。
 
 ## STEP 3 — 生成 GLSL

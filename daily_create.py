@@ -4,12 +4,13 @@ from datetime import datetime
 from pathlib import Path
 import requests
 
-WORKSPACE    = Path("/home/pinkmoney/.openclaw/workspace")
-RENDER_PY    = WORKSPACE / "pinkmoney_render.py"
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
-NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
-TG_BOT_TOKEN = "8627190890:AAG5jJ8WjlaFdVJnWbgAFzB98GUoi4mQQ04"
-TG_CHAT_ID   = "5390091587"
+WORKSPACE     = Path("/home/pinkmoney/.openclaw/workspace")
+RENDER_PY     = WORKSPACE / "pinkmoney_render.py"
+GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN", "")
+NOTION_TOKEN  = os.environ.get("NOTION_TOKEN", "")
+TAVILY_KEY    = os.environ.get("TAVILY_API_KEY", "")
+TG_BOT_TOKEN  = "8627190890:AAG5jJ8WjlaFdVJnWbgAFzB98GUoi4mQQ04"
+TG_CHAT_ID    = "5390091587"
 
 DATE    = datetime.now().strftime("%Y-%m-%d")
 OUT_DIR = WORKSPACE / DATE
@@ -43,7 +44,95 @@ def check(condition, step, detail=""):
         sys.exit(1)
     log(f"CHECK ✅", step)
 
-def fix_sc_nrt(sc_path):
+def tavily_search(query, topic="general", time_range="day", max_results=5):
+    """Tavily search，返回 answer + results 列表"""
+    if not TAVILY_KEY:
+        return {"answer": "", "results": []}
+    resp = requests.post(
+        "https://api.tavily.com/search",
+        headers={"Authorization": f"Bearer {TAVILY_KEY}", "Content-Type": "application/json"},
+        json={"query": query, "topic": topic, "time_range": time_range,
+              "max_results": max_results, "include_answer": True},
+        timeout=15)
+    if resp.status_code == 200:
+        return resp.json()
+    return {"answer": "", "results": []}
+
+def read_user_state():
+    """读取今日 memory 文件，提取用户状态关键词"""
+    mem_path = WORKSPACE / "memory" / f"{DATE}.md"
+    if not mem_path.exists():
+        return ""
+    text = mem_path.read_text(encoding="utf-8")
+    # 取前 1500 字，足够提取情绪/事件/关键词
+    return text[:1500]
+
+
+def gather_world_signals():
+    """收集今日外部信号，返回结构化 dict"""
+    log("STEP - 信息收集", f"Tavily search: {DATE}")
+    month_day = f"March {DATE.split('-')[2]}"
+    results = {}
+
+    # 1. 新闻：政治/科技/经济/环境（10条）
+    r_news = tavily_search(
+        f"{DATE} world news today politics technology science economy environment",
+        topic="news", time_range="day", max_results=10)
+    news_items = [f"- {r['title']}: {r['content'][:120]}"
+                  for r in r_news.get("results", [])]
+    results["news_answer"] = r_news.get("answer") or ""
+    results["news_items"]  = "\n".join(news_items)
+
+    # 1b. 文化/艺术/娱乐（独立搜索，避免被政治淹没）
+    r_culture = tavily_search(
+        f"{DATE} art music film culture entertainment exhibition concert release today",
+        topic="news", time_range="day", max_results=5)
+    culture_items = [f"- {r['title']}: {r['content'][:120]}"
+                     for r in r_culture.get("results", [])]
+    results["culture_answer"] = r_culture.get("answer") or ""
+    results["culture_items"]  = "\n".join(culture_items)
+
+    # 2. 历史/节日：5条+
+    r_hist = tavily_search(
+        f"{month_day} history anniversary national holiday commemorations on this day",
+        time_range="week", max_results=7)
+    hist_items = [f"- {r['title']}: {r['content'][:120]}"
+                  for r in r_hist.get("results", [])]
+    results["history_answer"] = r_hist.get("answer", "")
+    results["history_items"]  = "\n".join(hist_items[:5])
+
+    # 3. 神秘/玄学：五个角度
+    r_taoism  = tavily_search(f"{DATE[:4]}年{int(DATE[5:7])}月{int(DATE[8:])}日 道教 农历 节气 宜忌 传统", max_results=3)
+    r_buddhism = tavily_search(f"March 15 2026 Buddhist holiday significance lunar calendar", max_results=3)
+    r_catholic = tavily_search(f"March 15 2026 Catholic saint feast day liturgical calendar", max_results=3)
+    r_astro    = tavily_search(f"March 15 2026 astrology sun moon Pisces Aries transit energy", max_results=3)
+    r_tarot    = tavily_search(f"March 15 2026 tarot card of the day reading energy", max_results=3)
+
+    results["mystic_taoism"]   = r_taoism.get("answer") or ""
+    results["mystic_buddhism"] = r_buddhism.get("answer") or ""
+    results["mystic_catholic"] = r_catholic.get("answer") or ""
+    results["mystic_astro"]    = r_astro.get("answer") or ""
+    results["mystic_tarot"]    = r_tarot.get("answer") or ""
+
+    # 4. 用户状态（自动读 memory）
+    results["user_state"] = read_user_state()
+
+    # log 摘要
+    summary = (
+        f"[新闻] {results['news_answer'][:150]}\n"
+        f"[文化] {results['culture_answer'][:150]}\n"
+        f"[历史] {results['history_answer'][:150]}\n"
+        f"[玄学-道教] {results['mystic_taoism'][:80]}\n"
+        f"[玄学-佛教] {results['mystic_buddhism'][:80]}\n"
+        f"[玄学-天主教] {results['mystic_catholic'][:80]}\n"
+        f"[玄学-占星] {results['mystic_astro'][:80]}\n"
+        f"[玄学-塔罗] {results['mystic_tarot'][:80]}\n"
+        f"[用户状态] {'有' if results['user_state'] else '无'} memory 记录"
+    )
+    log("STEP - 信息完成", summary)
+    return results
+
+
     code = Path(sc_path).read_text()
     if '.add;' not in code:
         return
