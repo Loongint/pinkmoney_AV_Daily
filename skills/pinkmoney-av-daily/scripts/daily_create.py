@@ -337,7 +337,9 @@ def post_instagram(mp4_path, caption):
         session_file = WORKSPACE / ".instagram_session.json"
         if session_file.exists():
             cl.load_settings(str(session_file))
-        cl.login_by_sessionid(sessionid)
+        else:
+            log("STEP - Instagram跳过", "session 文件不存在")
+            return ""
         media = cl.clip_upload(str(Path(mp4_path).resolve()), caption)
         url = f"https://www.instagram.com/reel/{media.code}"
         cl.dump_settings(str(session_file))
