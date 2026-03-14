@@ -142,3 +142,65 @@ SC文件存在: /home/pinkmoney/.openclaw/workspace/2026-03-15/2026-03-15.scd
 [06:19:39] STEP - GitHub push
 2026-03-15/
 
+[06:20:04] CHECK ✅
+GitHub push
+
+[06:20:24] STEP - GitHub完成
+✅ pushed 2026-03-15/
+
+[06:20:44] STEP - Post文字生成
+
+无月之判 / Null_Verdict.0
+— 无月之判 | Null_Verdict.0
+
+glsl → https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/2026-03-15/2026-03-15.frag
+sc   → https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/2026-03-15/2026-03-15.scd
+
+#generativeart #glsl #supercollider #audiovisual #shader
+
+[06:21:05] STEP - 小红书发布
+/home/pinkmoney/.openclaw/workspace/2026-03-15/2026-03-15.mp4
+
+[06:21:44] STEP - 小红书完成
+✅
+tps://creator.xiaohongshu.com/publish/success?source&bind_status=not_bind&__debugger__=&proxy=
+result: https://creator.xiaohongshu.com/publish/success?source&bind_status=not_bind&__debugger__=&proxy=
+
+
+[06:22:04] STEP - 微博发布
+/home/pinkmoney/.openclaw/workspace/2026-03-15/2026-03-15.mp4
+
+[06:22:53] STEP - 微博完成
+✅ https://weibo.com/upload/channel#done
+
+[06:23:13] STEP - Instagram发布
+/home/pinkmoney/.openclaw/workspace/2026-03-15/2026-03-15.mp4
+
+[06:23:19] CHECK ✅
+MP4 视频生成
+
+[06:23:23] STEP - 合并音频
+ffmpeg -map
+
+[06:23:28] CHECK ✅
+合并音视频
+
+[06:23:32] CHECK ✅
+合并后音频有声 (max: -9.5dB)
+
+[06:23:36] STEP - 视频完成
+✅  大小:6232KB  耗时:336s
+
+[06:23:40] STEP - Notion存档
+主题:无月之判 | Null_Verdict.0
+
+[06:23:40] STEP - Instagram失败
+[INS] ERROR: Error: '400 Client Error: Bad Request for url: https://www.instagram.com/graphql/query/?variables=%7B%22user_id%22%3A%2243851052074%22%2C%22include_reel%22%3Atrue%7D&query_hash=ad99dd9d3646cc3c0dda65debcd266a7'. Message: 'invalid request'
+
+
+[06:23:45] STEP - Notion失败
+400: {"object":"error","status":400,"code":"validation_error","message":"Provide a `parent.page_id` or `parent.database_id` parameter to create a page, or use a public integration with `insert_content` capability. Internal integrations aren't owned by a single user, so creating workspace-level private pa
+
+[06:23:49] STEP - GitHub push
+2026-03-15/
+
