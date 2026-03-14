@@ -136,63 +136,31 @@ async def fetch_pending_replies(page, my_uid: str, target_uid: str, state: dict)
     return pending
 
 
-async def post_comment(page, post_url: str, comment_text: str) -> bool:
-    """发布评论到指定帖子"""
-    print(f"[Watch] 打开帖子: {post_url}")
-    await page.goto(post_url, timeout=30000)
-    await asyncio.sleep(3)
-
-    if "login" in page.url:
-        print("[Watch] ERROR: 未登录")
-        return False
-
-    input_el = None
-    for sel in ["textarea[placeholder*='评论']", "div[contenteditable='true']", "textarea"]:
-        try:
-            el = await page.wait_for_selector(sel, timeout=5000)
-            if el:
-                input_el = el
-                break
-        except Exception:
-            continue
-
-    if not input_el:
-        try:
-            await page.click("button:has-text('评论')", timeout=3000)
-            await asyncio.sleep(1)
-            for sel in ["textarea[placeholder*='评论']", "textarea"]:
-                try:
-                    el = await page.wait_for_selector(sel, timeout=3000)
-                    if el:
-                        input_el = el
-                        break
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-    if not input_el:
-        print("[Watch] ERROR: 找不到评论输入框")
-        return False
-
-    await input_el.click()
-    await asyncio.sleep(0.3)
-    await page.keyboard.insert_text(comment_text)
-    await asyncio.sleep(0.5)
-
-    for sel in ["button:has-text('发表')", "button:has-text('评论')"]:
-        try:
-            btn = await page.query_selector(sel)
-            if btn and await btn.is_visible():
-                await btn.click()
-                await asyncio.sleep(2)
-                return True
-        except Exception:
-            continue
-
-    await page.keyboard.press("Control+Enter")
-    await asyncio.sleep(2)
-    return True
+async def post_comment(page, post_id: str, comment_text: str, reply_id: str = "") -> bool:
+    """用微博 AJAX API 发评论（不依赖 DOM）"""
+    result = await page.evaluate(f'''async () => {{
+        const xsrfMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+        if (!xsrfMatch) return {{error: "no XSRF-TOKEN"}};
+        const xsrf = decodeURIComponent(xsrfMatch[1]);
+        const formData = new FormData();
+        formData.append("id", "{post_id}");
+        formData.append("comment", {json.dumps(comment_text)});
+        formData.append("mid", "{post_id}");
+        formData.append("st", xsrf);
+        {"formData.append('reply_id', '" + reply_id + "');" if reply_id else ""}
+        const r = await fetch("https://weibo.com/ajax/comments/create", {{
+            method: "POST",
+            credentials: "include",
+            headers: {{ "X-XSRF-TOKEN": xsrf }},
+            body: formData
+        }});
+        const t = await r.text();
+        try {{ return JSON.parse(t); }} catch(e) {{ return {{raw: t.slice(0,200)}}; }}
+    }}''')
+    if result.get("ok") == 1:
+        return True
+    print(f"[Watch] API 返回: {json.dumps(result, ensure_ascii=False)[:200]}")
+    return False
 
 
 async def main_async(target_uid: str, my_uid: str, dry_run: bool = False):
@@ -236,7 +204,7 @@ async def main_async(target_uid: str, my_uid: str, dry_run: bool = False):
             print(f"  评论: {comment}")
 
             if not dry_run:
-                ok = await post_comment(page, post["url"], comment)
+                ok = await post_comment(page, post["id"], comment)
                 print(f"  {'✅ 已发' if ok else '❌ 失败'}")
                 if ok:
                     results["new_comments"].append({"post": post["text"][:50], "comment": comment})
@@ -265,7 +233,8 @@ async def main_async(target_uid: str, my_uid: str, dry_run: bool = False):
             print(f"  回复: {reply}")
 
             if not dry_run:
-                ok = await post_comment(page, item["url"], reply)
+                # 用帖子 rootid 发回复
+                ok = await post_comment(page, item["comment_id"], reply, reply_id=item["comment_id"])
                 print(f"  {'✅ 已发' if ok else '❌ 失败'}")
                 if ok:
                     already_replied.add(item["comment_id"])
