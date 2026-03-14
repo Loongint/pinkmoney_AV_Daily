@@ -404,7 +404,13 @@ def post_weibo(mp4_path, text):
     ig_url = post_instagram(mp4_path, ig_caption)
 
     # 微博发布
-    weibo_text = f"{theme}\n\nGLSL + SuperCollider audiovisual\ngithub.com/Loongint/pinkmoney_AV_Daily\n\n#generativeart #glsl #supercollider #audiovisual"
+    gh_base = f"https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/{DATE}"
+    weibo_text = (
+        f"{theme}\n\n"
+        f"glsl → {gh_base}/{DATE}.frag\n"
+        f"sc   → {gh_base}/{DATE}.scd\n\n"
+        f"#generativeart #glsl #supercollider #audiovisual #shader"
+    )
     weibo_url = post_weibo(mp4_path, weibo_text)
 
     log("DONE", f"✅ 总耗时:{time.time()-t_start:.0f}s\n主题:{theme}\nmp4:{mp4_path}\nnotion:{notion_url}\ninstagram:{ig_url}\nweibo:{weibo_url}")
