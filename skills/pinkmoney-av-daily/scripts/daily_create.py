@@ -251,7 +251,7 @@ def archive_notion(theme, glsl_code, sc_code):
             "rich_text":[{"type":"text","text":{"content":c}}],"language":lang}}
             for c in [code[i:i+1900] for i in range(0, len(code), 1900)]]
     body = {
-        "parent": {"type":"workspace","workspace":True},
+        "parent": {"type":"page_id","page_id":"18febe880d0280febba4e7865095f44c"},
         "properties": {"title":{"title":[{"text":{"content":f"pink;money · {DATE} · {theme}"}}]}},
         "children": [
             {"object":"block","type":"heading_2","heading_2":{"rich_text":[{"type":"text","text":{"content":"主题"}}]}},
