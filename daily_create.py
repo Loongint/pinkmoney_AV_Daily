@@ -24,7 +24,7 @@ def notify(text):
         requests.post(
             f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
             json={"chat_id": TG_CHAT_ID, "text": f"💜 pink;money\n{text}"},
-            timeout=10)
+            timeout=2)
     except Exception:
         pass
 
@@ -125,14 +125,19 @@ def gather_world_signals():
 
 def fix_sc_nrt(sc_path):
     code = Path(sc_path).read_text()
-    if '.add;' not in code:
-        return
-    def to_d_recv(m):
-        block = re.sub(r'\s*\}\s*\)\s*\.add\s*;$', '}).asBytes', m.group(1).rstrip())
-        return f'score.add([0.0, ["/d_recv", {block}]]);'
-    fixed = re.sub(r'(SynthDef\(.*?\}\s*\)\s*\.add\s*;)', to_d_recv, code, flags=re.DOTALL)
-    Path(sc_path).write_text(fixed)
-    log("SC修复", "SynthDef .add → d_recv 自动转换完成")
+    changed = False
+    if '.add;' in code:
+        def to_d_recv(m):
+            block = re.sub(r'\s*\}\s*\)\s*\.add\s*;$', '}).asBytes', m.group(1).rstrip())
+            return f'score.add([0.0, ["/d_recv", {block}]]);'
+        code = re.sub(r'(SynthDef\(.*?\}\s*\)\s*\.add\s*;)', to_d_recv, code, flags=re.DOTALL)
+        changed = True
+        log("SC修复", "SynthDef .add → d_recv 自动转换完成")
+    if '0.exit;' not in code:
+        code = code.rstrip() + '\n0.exit;\n'
+        changed = True
+    if changed:
+        Path(sc_path).write_text(code)
 
 def render_audio(osc_path, sc_path, wav_path, duration=30):
     fix_sc_nrt(sc_path)
@@ -140,7 +145,7 @@ def render_audio(osc_path, sc_path, wav_path, duration=30):
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
     log("STEP - sclang生成OSC", str(sc_path))
-    result = subprocess.run(["sclang", str(sc_path)], env=env, timeout=60,
+    result = subprocess.run(["sclang", str(sc_path)], env=env, timeout=180,
                             capture_output=True, text=True)
     check(Path(osc_path).exists(), "OSC score 生成", result.stderr[-300:])
 
@@ -267,7 +272,9 @@ def push_github(theme):
 def post_xhs(mp4_path, theme_zh, theme_en, post_text):
     log("STEP - 小红书发布", str(mp4_path))
     title = f"Daily Audiovisual Livecoding - {datetime.now().strftime('%y/%m/%d')}"
-    text  = f"{theme_zh} / {theme_en}\n\n{post_text.split(chr(10)*2)[0]}\n\n#audiovisual #livecoding #glsl #supercollider #pinkmoney"
+    # post_text 第一行已是 "theme_zh / theme_en"，直接用，只换 hashtag
+    body = "\n\n".join(post_text.split("\n\n")[1:])  # 去掉第一段（标题行）
+    text  = f"{theme_zh} / {theme_en}\n\n{body}\n\n#audiovisual #livecoding #glsl #supercollider #pinkmoney"
     result = subprocess.run(
         [sys.executable, str(WORKSPACE / "post_xhs.py"),
          "--video", str(mp4_path), "--title", title, "--text", text,
@@ -350,8 +357,7 @@ def run(theme, glsl_code, sc_code, duration=30):
     # 发布三渠道
     post_xhs(mp4_path, theme_zh, theme_en, post_text)
     weibo_url = post_weibo(mp4_path, post_text)
-    ig_caption = post_text + "\n\n#glsl #supercollider #audiovisual #livecoding #generativeart #shaderart"
-    ig_url = post_instagram(mp4_path, ig_caption)
+    ig_url = post_instagram(mp4_path, post_text)
 
     log("DONE", (
         f"✅ 总耗时:{time.time()-t_start:.0f}s\n"
