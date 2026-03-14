@@ -63,6 +63,7 @@ cd /home/pinkmoney/.openclaw/workspace
 source .env
 python3 daily_create.py \
   --theme "中文标题 | English Title" \
+  --theme-note "Theme note 英文一句话制作提示" \
   --glsl YYYY-MM-DD/YYYY-MM-DD.frag \
   --sc YYYY-MM-DD/YYYY-MM-DD.scd \
   --duration 30

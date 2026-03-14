@@ -324,7 +324,7 @@ def post_instagram(mp4_path, caption):
 
 # ─── 主流程 ────────────────────────────────────────────────────
 
-def run(theme, glsl_code, sc_code, duration=30):
+def run(theme, glsl_code, sc_code, duration=30, theme_note=""):
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     t_start = time.time()
     log("START", f"date:{DATE}  theme:{theme}  duration:{duration}s")
@@ -352,7 +352,7 @@ def run(theme, glsl_code, sc_code, duration=30):
     # 生成 post 文字
     theme_zh = theme.split(" | ")[0].strip() if " | " in theme else theme.split(" / ")[0].strip()
     theme_en = theme.split(" | ")[1].strip() if " | " in theme else (theme.split(" / ")[1].strip() if " / " in theme else theme)
-    post_text = generate_post_text(theme_zh, theme_en, theme, str(glsl_path))
+    post_text = generate_post_text(theme_zh, theme_en, theme_note or theme, str(glsl_path))
 
     # 发布三渠道
     post_xhs(mp4_path, theme_zh, theme_en, post_text)
@@ -372,14 +372,16 @@ def run(theme, glsl_code, sc_code, duration=30):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--theme",    required=True)
-    parser.add_argument("--glsl",     required=True)
-    parser.add_argument("--sc",       required=True)
-    parser.add_argument("--duration", type=int, default=30)
+    parser.add_argument("--theme",      required=True)
+    parser.add_argument("--glsl",       required=True)
+    parser.add_argument("--sc",         required=True)
+    parser.add_argument("--duration",   type=int, default=30)
+    parser.add_argument("--theme-note", default="", dest="theme_note")
     args = parser.parse_args()
     run(
-        theme     = args.theme,
-        glsl_code = open(args.glsl).read(),
-        sc_code   = open(args.sc).read(),
-        duration  = args.duration
+        theme      = args.theme,
+        glsl_code  = open(args.glsl).read(),
+        sc_code    = open(args.sc).read(),
+        duration   = args.duration,
+        theme_note = args.theme_note
     )
