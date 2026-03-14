@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, time, subprocess, shutil
+import os, sys, time, subprocess, re
 from datetime import datetime
 from pathlib import Path
 import requests
@@ -33,8 +33,17 @@ def log(step, content):
         f.write(entry)
     notify(f"[{ts}] {step}\n{content}")
 
+def check(condition, step, detail=""):
+    if not condition:
+        msg = f"❌ FAILED: {step}"
+        if detail:
+            msg += f"\n{detail}"
+        log("CHECK FAILED", msg)
+        notify(f"🚨 pink;money 流程中断\n{msg}")
+        sys.exit(1)
+    log(f"CHECK ✅", step)
+
 def fix_sc_nrt(sc_path):
-    import re
     code = Path(sc_path).read_text()
     if '.add;' not in code:
         return
@@ -43,11 +52,19 @@ def fix_sc_nrt(sc_path):
         return f'score.add([0.0, ["/d_recv", {block}]]);'
     fixed = re.sub(r'(SynthDef\(.*?\}\s*\)\s*\.add\s*;)', to_d_recv, code, flags=re.DOTALL)
     Path(sc_path).write_text(fixed)
-    log("STEP - SC修复", "SynthDef .add → d_recv 自动转换完成")
+    log("SC修复", "SynthDef .add → d_recv 自动转换完成")
 
-def render_audio(osc_path, wav_path, sc_path=None, duration=30):
-    if sc_path:
-        fix_sc_nrt(sc_path)
+def render_audio(osc_path, sc_path, wav_path, duration=30):
+    fix_sc_nrt(sc_path)
+    check(Path(sc_path).exists(), f"SC文件存在: {sc_path}")
+
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    log("STEP - sclang生成OSC", str(sc_path))
+    result = subprocess.run(["sclang", str(sc_path)], env=env, timeout=60,
+                            capture_output=True, text=True)
+    check(Path(osc_path).exists(), "OSC score 生成", result.stderr[-300:])
+
     log("STEP - 音频渲染", f"scsynth NRT  osc={osc_path}")
     t0 = time.time()
     subprocess.run(
@@ -56,15 +73,25 @@ def render_audio(osc_path, wav_path, sc_path=None, duration=30):
          "/tmp/pm_silent.wav"],
         capture_output=True)
     subprocess.run(
-        ["scsynth", "-N", osc_path, "/tmp/pm_silent.wav", str(wav_path),
+        ["scsynth", "-N", str(osc_path), "/tmp/pm_silent.wav", str(wav_path),
          "44100", "wav", "int16", "-o", "2"],
         timeout=120, capture_output=True)
-    ok   = Path(wav_path).exists()
-    size = Path(wav_path).stat().st_size // 1024 if ok else 0
-    log("STEP - 音频完成", f"状态:{'✅' if ok else '❌'}  大小:{size}KB  耗时:{time.time()-t0:.0f}s")
-    return ok
+    check(Path(wav_path).exists(), "WAV 文件生成")
 
-def render_video(glsl_path, sc_path, osc_path, wav_path, mp4_path, duration=30):
+    vol = subprocess.run(
+        ["ffmpeg", "-i", str(wav_path), "-af", "volumedetect", "-f", "null", "/dev/null"],
+        capture_output=True, text=True)
+    max_vol = re.search(r"max_volume:\s*([-\d.]+)", vol.stderr)
+    max_db  = float(max_vol.group(1)) if max_vol else -99
+    check(max_db > -80, f"音频有声音 (max: {max_db}dB)", "scsynth 渲染出静音，检查 SynthDef")
+
+    size = Path(wav_path).stat().st_size // 1024
+    log("STEP - 音频完成", f"✅  大小:{size}KB  max:{max_db}dB  耗时:{time.time()-t0:.0f}s")
+
+def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
+    check(Path(glsl_path).exists(), f"GLSL文件存在: {glsl_path}")
+    check(Path(sc_path).exists(),   f"SC文件存在: {sc_path}")
+
     log("STEP - 视频渲染", f"1920x1080 {duration}s @ 30fps")
     t0  = time.time()
     cmd = [sys.executable, str(RENDER_PY),
@@ -72,20 +99,42 @@ def render_video(glsl_path, sc_path, osc_path, wav_path, mp4_path, duration=30):
            "--sc",   str(sc_path),
            "--output", str(mp4_path),
            "--duration", str(duration)]
-    if osc_path and Path(osc_path).exists() and Path(wav_path).exists():
-        cmd += ["--osc", str(osc_path)]
+    if wav_path and Path(wav_path).exists():
+        cmd += ["--no-audio"]
     else:
         cmd += ["--no-audio"]
     result = subprocess.run(cmd, capture_output=True, text=True)
-    ok   = Path(mp4_path).exists()
-    size = Path(mp4_path).stat().st_size // 1024 if ok else 0
-    log("STEP - 视频完成", f"状态:{'✅' if ok else '❌'}  大小:{size}KB  耗时:{time.time()-t0:.0f}s")
-    if not ok:
-        log("STEP - 视频错误", result.stderr[-800:])
-    return ok
+    check(Path(mp4_path).exists(), "MP4 视频生成", result.stderr[-500:])
+
+    if wav_path and Path(wav_path).exists():
+        log("STEP - 合并音频", "ffmpeg -map")
+        merged = str(mp4_path).replace(".mp4", "_final.mp4")
+        r = subprocess.run([
+            "ffmpeg", "-y",
+            "-i", str(mp4_path),
+            "-i", str(wav_path),
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-shortest",
+            merged
+        ], capture_output=True, text=True)
+        check(Path(merged).exists(), "合并音视频", r.stderr[-300:])
+
+        vol = subprocess.run(
+            ["ffmpeg", "-i", merged, "-af", "volumedetect", "-f", "null", "/dev/null"],
+            capture_output=True, text=True)
+        max_vol = re.search(r"max_volume:\s*([-\d.]+)", vol.stderr)
+        max_db  = float(max_vol.group(1)) if max_vol else -99
+        check(max_db > -80, f"合并后音频有声 (max: {max_db}dB)")
+        Path(merged).rename(mp4_path)
+
+    size = Path(mp4_path).stat().st_size // 1024
+    log("STEP - 视频完成", f"✅  大小:{size}KB  耗时:{time.time()-t0:.0f}s")
 
 def archive_notion(theme, glsl_code, sc_code):
     log("STEP - Notion存档", f"主题:{theme}")
+    if not NOTION_TOKEN:
+        log("STEP - Notion跳过", "NOTION_TOKEN 未设置")
+        return ""
     headers = {
         "Authorization": f"Bearer {NOTION_TOKEN}",
         "Notion-Version": "2022-06-28",
@@ -95,7 +144,6 @@ def archive_notion(theme, glsl_code, sc_code):
         return [{"object":"block","type":"code","code":{
             "rich_text":[{"type":"text","text":{"content":c}}],"language":lang}}
             for c in [code[i:i+1900] for i in range(0, len(code), 1900)]]
-
     body = {
         "parent": {"type":"workspace","workspace":True},
         "properties": {"title":{"title":[{"text":{"content":f"pink;money · {DATE} · {theme}"}}]}},
@@ -120,8 +168,8 @@ def archive_notion(theme, glsl_code, sc_code):
 def push_github(theme):
     log("STEP - GitHub push", f"{DATE}/")
     rel_files = [
-        f"{DATE}/today.frag",
-        f"{DATE}/today.scd",
+        f"{DATE}/{DATE}.frag",
+        f"{DATE}/{DATE}.scd",
         f"{DATE}/run.log",
     ]
     existing = [f for f in rel_files if (WORKSPACE / f).exists()]
@@ -134,45 +182,45 @@ def push_github(theme):
     result = subprocess.run(["git", "-C", str(WORKSPACE), "push"],
                             capture_output=True, text=True, timeout=30)
     ok = result.returncode == 0
-    log("STEP - GitHub完成", f"{'✅' if ok else '❌'} {result.stderr.strip()[-200:]}")
+    check(ok, "GitHub push", result.stderr.strip()[-200:])
+    log("STEP - GitHub完成", f"✅ pushed {DATE}/")
 
-def run(theme, glsl_code, sc_code, osc_path=None, duration=30):
+def run(theme, glsl_code, sc_code, duration=30):
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     t_start = time.time()
     log("START", f"date:{DATE}  theme:{theme}  duration:{duration}s")
 
-    glsl_path = OUT_DIR / "today.frag"
-    sc_path   = OUT_DIR / "today.scd"
-    wav_path  = OUT_DIR / "today.wav"
-    mp4_path  = OUT_DIR / "today.mp4"
+    glsl_path = OUT_DIR / f"{DATE}.frag"
+    sc_path   = OUT_DIR / f"{DATE}.scd"
+    osc_path  = Path("/tmp/pm_score.osc")
+    wav_path  = OUT_DIR / f"{DATE}.wav"
+    mp4_path  = OUT_DIR / f"{DATE}.mp4"
 
+    check(glsl_code.strip(), "GLSL代码不为空")
+    check(sc_code.strip(),   "SC代码不为空")
     glsl_path.write_text(glsl_code)
     sc_path.write_text(sc_code)
+    log("CHECK ✅", f"代码写入: {glsl_path.name} / {sc_path.name}")
 
-    audio_ok = render_audio(osc_path, wav_path, sc_path, duration) if osc_path else False
-    render_video(glsl_path, sc_path,
-                 osc_path if audio_ok else None,
-                 wav_path if audio_ok else None,
-                 mp4_path, duration)
+    render_audio(osc_path, sc_path, wav_path, duration)
+    render_video(glsl_path, sc_path, wav_path, mp4_path, duration)
     notion_url = archive_notion(theme, glsl_code, sc_code)
     push_github(theme)
 
-    log("DONE", f"总耗时:{time.time()-t_start:.0f}s  mp4:{mp4_path}  notion:{notion_url}")
+    log("DONE", f"✅ 总耗时:{time.time()-t_start:.0f}s\n主题:{theme}\nmp4:{mp4_path}\nnotion:{notion_url}")
     return str(mp4_path)
 
 if __name__ == "__main__":
-    import argparse, json
+    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--theme",    required=True)
     parser.add_argument("--glsl",     required=True)
     parser.add_argument("--sc",       required=True)
-    parser.add_argument("--osc",      default=None)
     parser.add_argument("--duration", type=int, default=30)
     args = parser.parse_args()
     run(
         theme     = args.theme,
         glsl_code = open(args.glsl).read(),
         sc_code   = open(args.sc).read(),
-        osc_path  = args.osc,
         duration  = args.duration
     )

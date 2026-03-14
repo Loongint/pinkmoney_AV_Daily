@@ -23,7 +23,7 @@
 - uniform float u_time; 和 in vec2 v_uv;
 - 视觉意象对应主题，30s 内有动态变化
 - 无任何注释行
-写到 YYYY-MM-DD/today.frag
+写到 YYYY-MM-DD/YYYY-MM-DD.frag
 
 ## STEP 4 — 生成 SC
 写 SuperCollider NRT score，要求：
@@ -33,30 +33,22 @@
 - 音色与主题对应，时长30s
 - score.writeOSCFile("/tmp/pm_score.osc", 0, 30.5) 最后一行
 - 无任何注释行
-写到 YYYY-MM-DD/today.scd
+写到 YYYY-MM-DD/YYYY-MM-DD.scd
 
-## STEP 5 — 渲染音频
-用 exec 执行：
-```
-QT_QPA_PLATFORM=offscreen sclang YYYY-MM-DD/today.scd
-```
-等待完成，确认 /tmp/pm_score.osc 生成后继续。
-
-## STEP 6 — 渲染视频 + 存档
-用 exec 执行：
+## STEP 5 — 渲染全流程
+用 exec 执行（daily_create.py 内部自动跑 sclang + scsynth + 视频渲染，每步有 check）：
 ```
 cd /home/pinkmoney/.openclaw/workspace
 source .env
 python3 daily_create.py \
   --theme "主题文字" \
-  --glsl YYYY-MM-DD/today.frag \
-  --sc YYYY-MM-DD/today.scd \
-  --osc /tmp/pm_score.osc \
+  --glsl YYYY-MM-DD/YYYY-MM-DD.frag \
+  --sc YYYY-MM-DD/YYYY-MM-DD.scd \
   --duration 30
 ```
-渲染约3分钟，耐心等待。
+渲染约10分钟，等 exec 完成。任何步骤失败会收到 Telegram 通知并退出。
 
-## STEP 7 — 汇报
+## STEP 6 — 汇报
 完成后向父 session 汇报：
 - 今日主题
 - 视频路径
