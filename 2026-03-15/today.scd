@@ -7,7 +7,7 @@ s.options.blockSize = 64;
 
 score = Score.new;
 
-SynthDef(\pm_void_drone, { |out = 0, freq = 27.5, amp = 0.0|
+score.add([0.0, ["/d_recv", SynthDef(\pm_void_drone, { |out = 0, freq = 27.5, amp = 0.0|
     var env, sig;
     env = EnvGen.kr(Env([0, amp, amp * 0.8, 0], [5.0, 18.0, 7.0], [-1, 0, -2]), doneAction: 2);
     sig = SinOsc.ar(freq) * 0.7;
@@ -16,10 +16,9 @@ SynthDef(\pm_void_drone, { |out = 0, freq = 27.5, amp = 0.0|
     sig = LPF.ar(sig, 400);
     sig = sig * env;
     sig = Pan2.ar(sig, 0.0);
-    Out.ar(out, sig);
-}).add;
+    Out.ar(out, sig);}).asBytes]]);
 
-SynthDef(\pm_moon_breath, { |out = 0, amp = 0.0, rate = 0.12, pan = 0.0|
+score.add([0.0, ["/d_recv", SynthDef(\pm_moon_breath, { |out = 0, amp = 0.0, rate = 0.12, pan = 0.0|
     var env, sig, lfo;
     env = EnvGen.kr(Env([0, amp, amp, 0], [3.0, 22.0, 5.0], [2, 0, -2]), doneAction: 2);
     lfo = SinOsc.kr(rate);
@@ -29,10 +28,9 @@ SynthDef(\pm_moon_breath, { |out = 0, amp = 0.0, rate = 0.12, pan = 0.0|
     sig = sig * env;
     sig = Pan2.ar(sig, pan);
     sig = FreeVerb.ar(sig, 0.85, 0.98, 0.6);
-    Out.ar(out, sig);
-}).add;
+    Out.ar(out, sig);}).asBytes]]);
 
-SynthDef(\pm_waning_blade, { |out = 0, freq = 55, amp = 0.0, atk = 2.0, sus = 8.0, rel = 4.0, pan = 0.0|
+score.add([0.0, ["/d_recv", SynthDef(\pm_waning_blade, { |out = 0, freq = 55, amp = 0.0, atk = 2.0, sus = 8.0, rel = 4.0, pan = 0.0|
     var env, sig, sub, noise;
     env = EnvGen.kr(Env([0, amp, amp * 0.7, 0], [atk, sus, rel], [-2, 0, -3]), doneAction: 2);
     sub = SinOsc.ar(freq) * 0.6;
@@ -45,10 +43,9 @@ SynthDef(\pm_waning_blade, { |out = 0, freq = 55, amp = 0.0, atk = 2.0, sus = 8.
     sig = CombL.ar(sig, 0.2, LFNoise1.kr(0.1).range(0.08, 0.18), 3.5) * 0.3 + sig;
     sig = FreeVerb.ar(sig, 0.6, 0.9, 0.4);
     sig = Pan2.ar(sig * env, pan);
-    Out.ar(out, sig);
-}).add;
+    Out.ar(out, sig);}).asBytes]]);
 
-SynthDef(\pm_ides_blade, { |out = 0, freq = 880, amp = 0.0, atk = 0.01, sus = 0.5, rel = 3.0, pan = 0.0|
+score.add([0.0, ["/d_recv", SynthDef(\pm_ides_blade, { |out = 0, freq = 880, amp = 0.0, atk = 0.01, sus = 0.5, rel = 3.0, pan = 0.0|
     var env, sig, harm;
     env = EnvGen.kr(Env([0, amp, amp * 0.3, 0], [atk, sus, rel], [5, -2, -4]), doneAction: 2);
     sig = SinOsc.ar(freq);
@@ -60,8 +57,7 @@ SynthDef(\pm_ides_blade, { |out = 0, freq = 880, amp = 0.0, atk = 0.01, sus = 0.
     sig = sig * env;
     sig = Pan2.ar(sig, pan);
     sig = FreeVerb.ar(sig, 0.8, 0.95, 0.5);
-    Out.ar(out, sig);
-}).add;
+    Out.ar(out, sig);}).asBytes]]);
 
 score.add([0.0, [\s_new, \pm_void_drone, 1001, 0, 0, \freq, 27.5, \amp, 0.18]]);
 score.add([0.0, [\s_new, \pm_moon_breath, 1002, 0, 0, \amp, 0.22, \rate, 0.08, \pan, -0.3]]);

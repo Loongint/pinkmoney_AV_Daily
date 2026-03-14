@@ -28,6 +28,8 @@
 ## STEP 4 — 生成 SC
 写 SuperCollider NRT score，要求：
 - SynthDef 名用 \pm_ 前缀
+- ⚠️ NRT 模式下 SynthDef **不能用 .add**，必须用 d_recv 方式加载：
+  `score.add([0.0, ["/d_recv", SynthDef(\name, {...}).asBytes]]);`
 - 音色与主题对应，时长30s
 - score.writeOSCFile("/tmp/pm_score.osc", 0, 30.5) 最后一行
 - 无任何注释行
