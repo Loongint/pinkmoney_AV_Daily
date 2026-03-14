@@ -105,7 +105,19 @@ python3 daily_create.py \
 ```
 渲染约10分钟，等 exec 完成。任何步骤失败会收到 Telegram 通知并退出。
 
-## STEP 6 — 汇报
+## STEP 7 — GitHub Push
+渲染完成后自动 push 当日文件：
+
+```bash
+cd /home/pinkmoney/.openclaw/workspace
+git add YYYY-MM-DD/
+git commit -m "YYYY-MM-DD: <主题zh> / <主题en>"
+git push
+```
+
+push 成功后在 run.log 写入 commit hash。
+
+## STEP 8 — 汇报
 完成后向父 session 汇报：
 - 今日主题（中英文）
 - Theme note
