@@ -165,6 +165,23 @@ def archive_notion(theme, glsl_code, sc_code):
         log("STEP - Notion失败", f"{r.status_code}: {r.text[:300]}")
         return ""
 
+def post_xhs(theme, mp4_path):
+    log("STEP - 小红书发布", f"标题: Daily Audiovisual Livecoding - {datetime.now().strftime('%y/%m/%d')}")
+    xhs_title = f"Daily Audiovisual Livecoding - {datetime.now().strftime('%y/%m/%d')}"
+    xhs_text  = f"{theme}\n\n#audiovisual #livecoding #glsl #supercollider #pinkmoney"
+    result = subprocess.run(
+        [sys.executable, str(WORKSPACE / "post_xhs.py"),
+         "--video", str(mp4_path),
+         "--title", xhs_title,
+         "--text",  xhs_text,
+         "--screenshot-dir", str(OUT_DIR)],
+        capture_output=True, text=True, timeout=300
+    )
+    if result.returncode == 0:
+        log("STEP - 小红书完成", f"✅\n{result.stdout[-200:]}")
+    else:
+        log("STEP - 小红书失败", f"returncode={result.returncode}\n{result.stderr[-300:]}")
+
 def push_github(theme):
     log("STEP - GitHub push", f"{DATE}/")
     rel_files = [
@@ -205,6 +222,7 @@ def run(theme, glsl_code, sc_code, duration=30):
     render_audio(osc_path, sc_path, wav_path, duration)
     render_video(glsl_path, sc_path, wav_path, mp4_path, duration)
     notion_url = archive_notion(theme, glsl_code, sc_code)
+    post_xhs(theme, mp4_path)
     push_github(theme)
 
     log("DONE", f"✅ 总耗时:{time.time()-t_start:.0f}s\n主题:{theme}\nmp4:{mp4_path}\nnotion:{notion_url}")

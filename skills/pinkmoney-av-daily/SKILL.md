@@ -11,8 +11,8 @@ description: pink;money 每日 AV 创作自动化流程。生成 GLSL fragment s
 ```bash
 cd /home/pinkmoney/.openclaw/workspace
 source .env
-python3 skills/pinkmoney-av-daily/scripts/daily_create.py \
-  --theme "主题文字" \
+python3 daily_create.py \
+  --theme "中文标题 | English Title" \
   --glsl YYYY-MM-DD/YYYY-MM-DD.frag \
   --sc   YYYY-MM-DD/YYYY-MM-DD.scd \
   --duration 30
