@@ -177,6 +177,25 @@ def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
     result = subprocess.run(cmd, capture_output=True, text=True)
     check(Path(mp4_path).exists(), "MP4 视频生成", result.stderr[-500:])
 
+    # 对比度检测：取5帧采样亮度均值，YAVG < 40 或 > 215 判定为异常
+    log("STEP - 对比度检测", str(mp4_path))
+    probe = subprocess.run([
+        "ffmpeg", "-i", str(mp4_path),
+        "-vf", "select='eq(n,15)+eq(n,100)+eq(n,300)+eq(n,600)+eq(n,850)',showinfo",
+        "-vsync", "0", "-f", "null", "/dev/null"
+    ], capture_output=True, text=True)
+    yavg_vals = [int(m) for m in re.findall(r"mean:\[(\d+)", probe.stderr)]
+    if yavg_vals:
+        yavg = sum(yavg_vals) / len(yavg_vals)
+        if yavg < 40:
+            check(False, f"对比度检测失败：画面过暗 (YAVG={yavg:.1f}，阈值<40)，请重写 GLSL shader")
+        elif yavg > 215:
+            check(False, f"对比度检测失败：画面过亮 (YAVG={yavg:.1f}，阈值>215)，请重写 GLSL shader")
+        else:
+            log("STEP - 对比度正常", f"✅ YAVG={yavg:.1f}")
+    else:
+        log("STEP - 对比度检测跳过", "无法解析亮度数据")
+
     if wav_path and Path(wav_path).exists():
         log("STEP - 合并音频", "ffmpeg -map")
         merged = str(mp4_path).replace(".mp4", "_final.mp4")
