@@ -169,6 +169,8 @@ def render_audio(osc_path, sc_path, wav_path, duration=30):
 def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
     check(Path(glsl_path).exists(), f"GLSL文件存在: {glsl_path}")
     check(Path(sc_path).exists(),   f"SC文件存在: {sc_path}")
+    # wav 必须存在且有声，否则直接 fail，不生成无声视频
+    check(wav_path and Path(wav_path).exists(), f"WAV文件存在: {wav_path}")
     log("STEP - 视频渲染", f"1920x1080 {duration}s @ 30fps")
     t0  = time.time()
     cmd = [sys.executable, str(RENDER_PY),
@@ -211,6 +213,8 @@ def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
         max_db  = float(max_vol.group(1)) if max_vol else -99
         check(max_db > -80, f"合并后音频有声 (max: {max_db}dB)")
         Path(merged).rename(mp4_path)
+    else:
+        check(False, "合并音频失败：WAV 文件不存在，中止流程")
 
     log("STEP - 视频完成", f"✅  大小:{Path(mp4_path).stat().st_size//1024}KB  耗时:{time.time()-t0:.0f}s")
 
