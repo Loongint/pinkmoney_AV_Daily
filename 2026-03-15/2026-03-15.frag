@@ -3,91 +3,81 @@ uniform float u_time;
 in vec2 v_uv;
 out vec4 fragColor;
 
-float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+float sdLine(vec2 p, vec2 a, vec2 b) {
+    vec2 pa = p - a, ba = b - a;
+    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h);
 }
 
-float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+float sdCircle(vec2 p, float r) {
+    return length(p) - r;
 }
 
-float fbm(vec2 p) {
-    float v = 0.0;
-    float a = 0.5;
-    for (int i = 0; i < 5; i++) {
-        v += a * noise(p);
-        p = p * 2.1 + vec2(1.7, 9.2);
-        a *= 0.5;
-    }
-    return v;
-}
-
-float crack(vec2 uv, float t) {
-    float phase = smoothstep(8.0, 22.0, t);
-    float n = fbm(uv * 3.0 + t * 0.08);
-    float line = abs(uv.x + (n - 0.5) * 1.2 * phase);
-    return smoothstep(0.012, 0.0, line) * phase;
-}
-
-vec3 waterField(vec2 uv, float t) {
-    float slow = t * 0.4;
-    float n1 = fbm(uv * 2.0 + vec2(slow * 0.3, slow * 0.2));
-    float n2 = fbm(uv * 4.0 - vec2(slow * 0.15, slow * 0.35) + n1 * 0.5);
-    float wave = sin(uv.x * 6.0 + n1 * 4.0 + t * 0.7) * 0.5 + 0.5;
-    wave *= sin(uv.y * 5.0 + n2 * 3.0 + t * 0.5) * 0.5 + 0.5;
-    float r = 0.05 + n2 * 0.18 + wave * 0.07;
-    float g = 0.06 + n1 * 0.12 + wave * 0.05;
-    float b = 0.18 + n2 * 0.35 + wave * 0.18;
-    return vec3(r, g, b);
-}
-
-vec3 roseLiturgy(vec2 uv, float t) {
-    float phase = smoothstep(18.0, 28.0, t);
-    float burst = exp(-length(uv) * (2.5 - phase * 1.5));
-    float rose_r = 0.72 * burst * phase;
-    float rose_g = 0.18 * burst * phase;
-    float rose_b = 0.42 * burst * phase;
-    return vec3(rose_r, rose_g, rose_b);
+float sdArc(vec2 p, float r, float th0, float th1) {
+    float a = atan(p.y, p.x);
+    a = mod(a - th0, 6.28318) + th0;
+    float clampedA = clamp(a, th0, th1);
+    vec2 nearest = r * vec2(cos(clampedA), sin(clampedA));
+    return length(p - nearest);
 }
 
 void main() {
     vec2 uv = v_uv * 2.0 - 1.0;
-    uv.x *= 1920.0 / 1080.0;
+    uv.x *= 1.7778;
 
     float t = u_time;
 
-    float ignition = smoothstep(26.0, 30.0, t);
-    float breath = sin(t * 0.8) * 0.5 + 0.5;
+    vec3 col = vec3(0.0);
 
-    vec3 water = waterField(uv, t);
+    float voidPulse = 0.028 + 0.012 * sin(t * 0.3);
+    float moonArc = sdArc(uv, 0.38, 3.1415 * 1.05, 3.1415 * 1.95);
+    float moonGlow = smoothstep(0.005, 0.0, moonArc) * voidPulse * 6.0;
+    col += vec3(0.7, 0.75, 0.9) * moonGlow;
 
-    float cr = crack(uv, t);
-    float cr2 = crack(vec2(-uv.y * 0.7 + 0.3, uv.x * 0.9 - 0.2), t * 0.9);
-    float cr3 = crack(uv * 1.4 + vec2(0.5, -0.3), t * 1.1);
-    vec3 crackLight = vec3(0.9, 0.85, 0.6) * (cr + cr2 * 0.6 + cr3 * 0.4);
+    float rimDist = abs(sdCircle(uv, 0.38));
+    float rimGlow = smoothstep(0.025, 0.0, rimDist) * 0.018;
+    col += vec3(0.3, 0.32, 0.45) * rimGlow;
 
-    vec3 liturgy = roseLiturgy(uv, t);
+    float loopT = mod(t * 0.18, 1.0);
+    float loopR = 0.62 + 0.04 * sin(t * 0.07);
+    float loopAng0 = -1.5708;
+    float loopAng1 = loopAng0 + loopT * 6.28318;
+    float loopArc = sdArc(uv, loopR, loopAng0, min(loopAng1, loopAng0 + 6.2));
+    float loopLine = smoothstep(0.004, 0.0, loopArc);
+    float loopFade = smoothstep(0.0, 0.3, loopT) * smoothstep(1.0, 0.85, loopT);
+    col += vec3(0.55, 0.18, 0.35) * loopLine * loopFade * 0.9;
 
-    float ripple = sin(length(uv) * 12.0 - t * 2.5) * 0.5 + 0.5;
-    ripple *= exp(-length(uv) * 1.2);
-    vec3 rippleCol = vec3(0.1, 0.3, 0.6) * ripple * (1.0 - smoothstep(12.0, 20.0, t) * 0.7);
+    float closingT = clamp((mod(t * 0.18, 1.0) - 0.9) / 0.1, 0.0, 1.0);
+    float closingFlash = exp(-closingT * 8.0) * closingT * 3.0;
+    col += vec3(0.9, 0.5, 0.6) * closingFlash;
 
-    vec3 col = water + rippleCol + crackLight + liturgy;
+    int nBlades = 3;
+    for (int i = 0; i < nBlades; i++) {
+        float phase = 6.28318 * float(i) / float(nBlades);
+        float bAng = phase + t * 0.04 + sin(t * 0.09 + phase) * 0.3;
+        vec2 bDir = vec2(cos(bAng), sin(bAng));
+        vec2 bOrigin = bDir * 0.52;
+        vec2 bTip = bDir * 0.82;
+        float bDist = sdLine(uv, bOrigin, bTip);
+        float blade = smoothstep(0.003, 0.0, bDist);
+        float bladePulse = 0.5 + 0.5 * sin(t * 1.2 + phase);
+        col += vec3(0.6, 0.68, 0.8) * blade * bladePulse * 0.25;
+    }
 
-    float igniteFlare = smoothstep(28.0, 30.0, t) * exp(-length(uv) * 1.8);
-    col += vec3(1.0, 0.6, 0.2) * igniteFlare * 2.5;
+    float scanY = mod(uv.y + t * 0.08, 2.0) - 1.0;
+    float scanLine = smoothstep(0.004, 0.0, abs(scanY)) * 0.04;
+    col += vec3(0.4, 0.45, 0.6) * scanLine;
 
-    float vignette = 1.0 - smoothstep(0.5, 1.5, length(uv));
+    float vignette = 1.0 - smoothstep(0.5, 1.3, length(uv * vec2(0.6, 0.9)));
     col *= vignette;
 
-    float fog = fbm(uv * 1.5 + t * 0.05) * 0.15 * (1.0 - ignition);
-    col += fog;
+    float grain = fract(sin(dot(v_uv + t * 0.001, vec2(127.1, 311.7))) * 43758.5453);
+    col += (grain - 0.5) * 0.012;
 
-    col = pow(clamp(col, 0.0, 1.0), vec3(0.85));
+    float breathe = 0.92 + 0.08 * sin(t * 0.25);
+    col *= breathe;
+
+    col = pow(clamp(col, 0.0, 1.0), vec3(0.88));
 
     fragColor = vec4(col, 1.0);
 }
