@@ -187,7 +187,8 @@ def render_video(glsl_src, sc_src, output_mp4, audio_wav=None, duration=30):
     print(f"[render] encoding...")
     cmd = ['ffmpeg', '-y', '-framerate', str(FPS), '-i', f"{tmpdir}/f_%05d.png"]
     if audio_wav and os.path.exists(audio_wav):
-        cmd += ['-i', audio_wav, '-c:a', 'aac', '-shortest']
+        cmd += ['-i', audio_wav, '-map', '0:v:0', '-map', '1:a:0',
+                '-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-shortest']
     cmd += ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', output_mp4]
     subprocess.run(cmd, check=True, capture_output=True)
     shutil.rmtree(tmpdir)
