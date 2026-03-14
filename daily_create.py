@@ -143,6 +143,9 @@ def gather_world_signals():
     Path(sc_path).write_text(fixed)
     log("SC修复", "SynthDef .add → d_recv 自动转换完成")
 
+def fix_sc_nrt(sc_path):
+    pass
+
 def render_audio(osc_path, sc_path, wav_path, duration=30):
     fix_sc_nrt(sc_path)
     check(Path(sc_path).exists(), f"SC文件存在: {sc_path}")
@@ -219,7 +222,26 @@ def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
     size = Path(mp4_path).stat().st_size // 1024
     log("STEP - 视频完成", f"✅  大小:{size}KB  耗时:{time.time()-t0:.0f}s")
 
-def generate_post_text(theme_zh, theme_en, theme_note, glsl_path, github_repo="https://github.com/Loongint/pinkmoney_AV_Daily"):
+def upload_video(mp4_path):
+    """上传视频到 uguu.se，返回公网 URL（文件保留3天，用于 Instagram 发布）"""
+    log("STEP - 上传视频", str(mp4_path))
+    result = subprocess.run(
+        ["curl", "-s", "--proxy", "http://172.27.32.1:7890",
+         "-F", f"files[]=@{mp4_path}",
+         "https://uguu.se/upload",
+         "-H", "Accept: application/json"],
+        capture_output=True, text=True, timeout=120)
+    import json as _json
+    data = _json.loads(result.stdout)
+    if data.get("success") and data.get("files"):
+        url = data["files"][0]["url"]
+        log("STEP - 上传完成", f"✅ {url}")
+        return url
+    log("STEP - 上传失败", result.stdout[:200])
+    return ""
+
+def generate_post_text(
+    theme_zh, theme_en, theme_note, glsl_path, github_repo="https://github.com/Loongint/pinkmoney_AV_Daily"):
     """生成发 post 用的文字，写入 run.log 和 post.txt"""
     # 基于 theme_note 生成一句话（从 note 提炼出最核心的意象，不超过一行）
     # 格式：主题(zh/en) - 一句话 - 代码链接
