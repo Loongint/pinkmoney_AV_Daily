@@ -167,9 +167,10 @@ async def main_async(target_uid: str, my_uid: str, dry_run: bool = False):
     from playwright.async_api import async_playwright
 
     state   = load_state()
-    post_key   = f"posts_{target_uid}"
-    reply_key  = f"replied_{my_uid}_{target_uid}"
-    seen_posts = set(state.get(post_key, {}).get("seen_ids", []))
+    post_key        = f"posts_{target_uid}"
+    reply_key       = f"replied_{my_uid}_{target_uid}"
+    seen_posts      = set(state.get(post_key, {}).get("seen_ids", []))
+    commented_posts = set(state.get(post_key, {}).get("commented_ids", []))  # 已评论过的帖子
     already_replied = set(state.get(reply_key, []))
 
     results = {"new_comments": [], "new_replies": []}
@@ -190,10 +191,10 @@ async def main_async(target_uid: str, my_uid: str, dry_run: bool = False):
         await asyncio.sleep(3)
 
         # ── 1. 新帖监控 ──────────────────────────────────
-        print(f"\n[Watch] ── 检测 {target_uid} 新帖（已知 {len(seen_posts)} 条）")
+        print(f"\n[Watch] ── 检测 {target_uid} 新帖（已知 {len(seen_posts)} 条，已评论 {len(commented_posts)} 条）")
         posts = await fetch_latest_posts(page, target_uid)
-        new_posts = [p for p in posts if p["id"] not in seen_posts]
-        print(f"[Watch] 新帖: {len(new_posts)} 条")
+        new_posts = [p for p in posts if p["id"] not in seen_posts and p["id"] not in commented_posts]
+        print(f"[Watch] 新帖（未评论）: {len(new_posts)} 条")
 
         for post in new_posts:
             print(f"\n  帖子: {post['url']}")
@@ -207,6 +208,7 @@ async def main_async(target_uid: str, my_uid: str, dry_run: bool = False):
                 ok = await post_comment(page, post["id"], comment)
                 print(f"  {'✅ 已发' if ok else '❌ 失败'}")
                 if ok:
+                    commented_posts.add(post["id"])  # 标记为已评论
                     results["new_comments"].append({"post": post["text"][:50], "comment": comment})
             else:
                 print("  🔍 dry-run")
@@ -247,8 +249,9 @@ async def main_async(target_uid: str, my_uid: str, dry_run: bool = False):
 
     # 更新 state
     state[post_key] = {
-        "seen_ids":   list(seen_posts),
-        "last_check": datetime.now().isoformat(),
+        "seen_ids":      list(seen_posts),
+        "commented_ids": list(commented_posts),  # 已评论，不再重复评论
+        "last_check":    datetime.now().isoformat(),
     }
     state[reply_key] = list(already_replied)
     save_state(state)
