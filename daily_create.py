@@ -228,11 +228,9 @@ def generate_post_text(theme_zh, theme_en, theme_note, glsl_path, github_repo="h
     sc_name   = Path(glsl_path).name.replace(".frag", ".scd")
     sc_url    = f"{github_repo}/blob/main/{date_path}/{sc_name}"
 
-    # 从 theme_note 里提炼一句话核心意象（取第一个分号/逗号前的部分，保持诗意）
+    # 从 theme_note 里提炼一句话——取第一个分号前的完整部分
     note_clean = theme_note.strip().rstrip(".")
-    # 取前半句，精炼到 10-15 词以内
-    sentence = note_clean.split(";")[0].split(",")[0].strip()
-    # 首字母大写
+    sentence = note_clean.split(";")[0].strip()
     sentence = sentence[0].upper() + sentence[1:] if sentence else note_clean
 
     post = (
