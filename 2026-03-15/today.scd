@@ -1,127 +1,88 @@
-// pink;money · 2026-03-15
-// Ides of March: 刀刃落下之前，水已成形
-// 意识在临界点的最后一次呼吸
-// NRT Score · 30 seconds
-
 (
-var score = Score.new;
-var dur = 30.0;
+var score, s;
+s = Server.default;
+s.options.numOutputBusChannels = 2;
+s.options.sampleRate = 44100;
+s.options.blockSize = 64;
 
-// ─────────────────────────────────────────────
-// SynthDef 1: 水面呼吸 — slow breathing water membrane
-// ─────────────────────────────────────────────
-SynthDef(\pm_water, { |out=0, freq=60, amp=0.3, breathRate=0.3, pan=0, atk=2, sus=20, rel=4|
-    var breath = SinOsc.kr(breathRate).range(0.4, 1.0);
-    var body = Mix([
-        SinOsc.ar(freq,        0, 0.5),
-        SinOsc.ar(freq * 1.5,  0, 0.25),
-        SinOsc.ar(freq * 2.01, 0, 0.12),
-        SinOsc.ar(freq * 3.99, 0, 0.06)
-    ]);
-    var noise = PinkNoise.ar(0.08);
-    var waterSig = (body * breath + noise) * amp;
-    // Subtle chorus — water ripple
-    var chorus = DelayC.ar(waterSig, 0.05, SinOsc.kr(0.17, 0).range(0.001, 0.03));
-    var env = EnvGen.kr(Env([0,1,1,0],[atk,sus,rel]), doneAction: 2);
-    var sig = (waterSig + chorus * 0.5) * env;
-    Out.ar(out, Pan2.ar(sig, pan));
+score = Score.new;
+
+SynthDef(\pm_void_drone, { |out = 0, freq = 27.5, amp = 0.0|
+    var env, sig;
+    env = EnvGen.kr(Env([0, amp, amp * 0.8, 0], [5.0, 18.0, 7.0], [-1, 0, -2]), doneAction: 2);
+    sig = SinOsc.ar(freq) * 0.7;
+    sig = sig + (SinOsc.ar(freq * 1.999) * 0.15);
+    sig = sig + (SinOsc.ar(freq * 3.001) * 0.08);
+    sig = LPF.ar(sig, 400);
+    sig = sig * env;
+    sig = Pan2.ar(sig, 0.0);
+    Out.ar(out, sig);
 }).add;
 
-// ─────────────────────────────────────────────
-// SynthDef 2: 刀刃 — metallic transient, sharp & brief
-// ─────────────────────────────────────────────
-SynthDef(\pm_blade, { |out=0, freq=880, amp=0.6, pan=0|
-    var click = Impulse.ar(0);
-    var ring  = SinOsc.ar(freq) * EnvGen.kr(Env.perc(0.001, 3.0, 1, -8), doneAction: 2);
-    var metal = BPF.ar(WhiteNoise.ar, freq * 1.7, 0.02) *
-                EnvGen.kr(Env.perc(0.0005, 0.8, 0.5, -12));
-    var sig = (ring + metal) * amp;
-    Out.ar(out, Pan2.ar(sig, pan));
+SynthDef(\pm_moon_breath, { |out = 0, amp = 0.0, rate = 0.12, pan = 0.0|
+    var env, sig, lfo;
+    env = EnvGen.kr(Env([0, amp, amp, 0], [3.0, 22.0, 5.0], [2, 0, -2]), doneAction: 2);
+    lfo = SinOsc.kr(rate);
+    sig = WhiteNoise.ar;
+    sig = BPF.ar(sig, lfo.range(200, 1200), 0.05, 2.0);
+    sig = sig + BPF.ar(WhiteNoise.ar, lfo.range(300, 2000), 0.03, 1.5);
+    sig = sig * env;
+    sig = Pan2.ar(sig, pan);
+    sig = FreeVerb.ar(sig, 0.85, 0.98, 0.6);
+    Out.ar(out, sig);
 }).add;
 
-// ─────────────────────────────────────────────
-// SynthDef 3: 散射意识 — granular dissolution
-// ─────────────────────────────────────────────
-SynthDef(\pm_dissolve, { |out=0, freq=400, amp=0.2, density=8, pan=0, dur=0.1|
-    var trig = Dust.kr(density);
-    var grainFreq = TRand.kr(freq * 0.5, freq * 2.0, trig);
-    var grain = SinOsc.ar(grainFreq) * Trig1.ar(trig.ar, 0.05);
-    var env = EnvGen.kr(Env([0,1,1,0],[2, 4, 2]), doneAction: 2);
-    var sig = grain * amp * env;
-    var revSig = FreeVerb.ar(sig, 0.9, 0.95, 0.4);
-    Out.ar(out, Pan2.ar(revSig, pan));
+SynthDef(\pm_waning_blade, { |out = 0, freq = 55, amp = 0.0, atk = 2.0, sus = 8.0, rel = 4.0, pan = 0.0|
+    var env, sig, sub, noise;
+    env = EnvGen.kr(Env([0, amp, amp * 0.7, 0], [atk, sus, rel], [-2, 0, -3]), doneAction: 2);
+    sub = SinOsc.ar(freq) * 0.6;
+    sig = VarSaw.ar(freq * [1.0, 1.003], 0, LFNoise2.kr(0.3).range(0.2, 0.5)).mean;
+    sig = sig + (SinOsc.ar(freq * 2.0) * 0.25);
+    sig = sig + (SinOsc.ar(freq * 3.01) * 0.12);
+    noise = BrownNoise.ar(0.04);
+    noise = LPF.ar(noise, 800);
+    sig = (sub * 0.4) + (sig * 0.5) + noise;
+    sig = CombL.ar(sig, 0.2, LFNoise1.kr(0.1).range(0.08, 0.18), 3.5) * 0.3 + sig;
+    sig = FreeVerb.ar(sig, 0.6, 0.9, 0.4);
+    sig = Pan2.ar(sig * env, pan);
+    Out.ar(out, sig);
 }).add;
 
-// ─────────────────────────────────────────────
-// SynthDef 4: 月光涟漪 — high shimmer pad
-// ─────────────────────────────────────────────
-SynthDef(\pm_moon, { |out=0, freq=1200, amp=0.08, rate=0.05, pan=0|
-    var lfo  = SinOsc.kr(rate).range(0.8, 1.2);
-    var sig  = SinOsc.ar(freq * lfo, 0, amp) + SinOsc.ar(freq * 1.333 * lfo, 0, amp * 0.5);
-    var env  = EnvGen.kr(Env([0,1,0],[5, 18, 7]), doneAction: 2);
-    var reverb = FreeVerb.ar(sig * env, 0.85, 0.99, 0.6);
-    Out.ar(out, Pan2.ar(reverb, pan));
+SynthDef(\pm_ides_blade, { |out = 0, freq = 880, amp = 0.0, atk = 0.01, sus = 0.5, rel = 3.0, pan = 0.0|
+    var env, sig, harm;
+    env = EnvGen.kr(Env([0, amp, amp * 0.3, 0], [atk, sus, rel], [5, -2, -4]), doneAction: 2);
+    sig = SinOsc.ar(freq);
+    harm = SinOsc.ar(freq * 1.5) * 0.3;
+    harm = harm + (SinOsc.ar(freq * 2.0) * 0.2);
+    harm = harm + (SinOsc.ar(freq * 7.0) * 0.05);
+    sig = sig + harm;
+    sig = HPF.ar(sig, 400);
+    sig = sig * env;
+    sig = Pan2.ar(sig, pan);
+    sig = FreeVerb.ar(sig, 0.8, 0.95, 0.5);
+    Out.ar(out, sig);
 }).add;
 
-// ─────────────────────────────────────────────
-// Score events
-// ─────────────────────────────────────────────
+score.add([0.0, [\s_new, \pm_void_drone, 1001, 0, 0, \freq, 27.5, \amp, 0.18]]);
+score.add([0.0, [\s_new, \pm_moon_breath, 1002, 0, 0, \amp, 0.22, \rate, 0.08, \pan, -0.3]]);
+score.add([0.0, [\s_new, \pm_waning_blade, 1003, 0, 0, \freq, 55.0, \amp, 0.28, \atk, 3.0, \sus, 10.0, \rel, 5.0, \pan, 0.1]]);
+score.add([4.0, [\s_new, \pm_ides_blade, 1004, 0, 0, \freq, 392.0, \amp, 0.18, \atk, 0.02, \sus, 0.3, \rel, 4.0, \pan, -0.5]]);
+score.add([4.05, [\s_new, \pm_ides_blade, 1005, 0, 0, \freq, 523.25, \amp, 0.14, \atk, 0.02, \sus, 0.2, \rel, 3.5, \pan, 0.4]]);
+score.add([8.0, [\s_new, \pm_waning_blade, 1006, 0, 0, \freq, 82.41, \amp, 0.22, \atk, 2.0, \sus, 6.0, \rel, 4.0, \pan, -0.2]]);
+score.add([12.0, [\s_new, \pm_ides_blade, 1007, 0, 0, \freq, 329.63, \amp, 0.16, \atk, 0.015, \sus, 0.4, \rel, 5.0, \pan, 0.3]]);
+score.add([12.1, [\s_new, \pm_ides_blade, 1008, 0, 0, \freq, 415.3, \amp, 0.12, \atk, 0.015, \sus, 0.35, \rel, 4.5, \pan, -0.4]]);
+score.add([12.2, [\s_new, \pm_ides_blade, 1009, 0, 0, \freq, 493.88, \amp, 0.10, \atk, 0.015, \sus, 0.3, \rel, 4.0, \pan, 0.6]]);
+score.add([16.0, [\s_new, \pm_moon_breath, 1010, 0, 0, \amp, 0.16, \rate, 0.15, \pan, 0.4]]);
+score.add([20.0, [\s_new, \pm_waning_blade, 1011, 0, 0, \freq, 110.0, \amp, 0.20, \atk, 1.5, \sus, 5.0, \rel, 4.5, \pan, -0.15]]);
+score.add([22.0, [\s_new, \pm_ides_blade, 1012, 0, 0, \freq, 261.63, \amp, 0.15, \atk, 0.01, \sus, 0.5, \rel, 6.0, \pan, 0.0]]);
+score.add([22.05, [\s_new, \pm_ides_blade, 1013, 0, 0, \freq, 329.63, \amp, 0.12, \atk, 0.01, \sus, 0.4, \rel, 5.5, \pan, -0.3]]);
+score.add([22.1, [\s_new, \pm_ides_blade, 1014, 0, 0, \freq, 392.0, \amp, 0.10, \atk, 0.01, \sus, 0.35, \rel, 5.0, \pan, 0.5]]);
+score.add([22.15, [\s_new, \pm_ides_blade, 1015, 0, 0, \freq, 523.25, \amp, 0.08, \atk, 0.01, \sus, 0.3, \rel, 4.5, \pan, -0.6]]);
+score.add([22.2, [\s_new, \pm_ides_blade, 1016, 0, 0, \freq, 659.25, \amp, 0.06, \atk, 0.01, \sus, 0.25, \rel, 4.0, \pan, 0.7]]);
+score.add([26.0, [\s_new, \pm_moon_breath, 1017, 0, 0, \amp, 0.10, \rate, 0.06, \pan, 0.0]]);
+score.add([30.5, [\c_set, 0, 0]]);
 
-// t=0: 水面呼吸开始（全程）
-score.add([0.0, [\s_new, \pm_water, 1000, 0, 0,
-    \freq, 55, \amp, 0.25, \breathRate, 0.28, \pan, -0.2,
-    \atk, 3.0, \sus, 20.0, \rel, 5.0]]);
-
-// t=0: 月光涟漪开始
-score.add([0.0, [\s_new, \pm_moon, 1001, 0, 0,
-    \freq, 1108, \amp, 0.07, \rate, 0.06, \pan, 0.3]]);
-
-// t=2: 第二层水（低八度）
-score.add([2.0, [\s_new, \pm_water, 1002, 0, 0,
-    \freq, 82, \amp, 0.18, \breathRate, 0.19, \pan, 0.35,
-    \atk, 2.0, \sus, 18.0, \rel, 6.0]]);
-
-// t=8: 呼吸加速，紧张感上升（第二层水高频）
-score.add([8.0, [\s_new, \pm_water, 1003, 0, 0,
-    \freq, 110, \amp, 0.12, \breathRate, 0.55, \pan, -0.4,
-    \atk, 1.0, \sus, 10.0, \rel, 4.0]]);
-
-// t=13: 刀刃落下 — 第一击
-score.add([13.0, [\s_new, \pm_blade, 1010, 0, 0,
-    \freq, 1760, \amp, 0.5, \pan, 0.0]]);
-
-// t=13.15: 刀刃余震
-score.add([13.15, [\s_new, \pm_blade, 1011, 0, 0,
-    \freq, 880, \amp, 0.3, \pan, -0.15]]);
-
-// t=13.4: 刀刃泛音
-score.add([13.4, [\s_new, \pm_blade, 1012, 0, 0,
-    \freq, 3520, \amp, 0.15, \pan, 0.2]]);
-
-// t=15: 意识开始散射
-score.add([15.0, [\s_new, \pm_dissolve, 1020, 0, 0,
-    \freq, 440, \amp, 0.15, \density, 6, \pan, 0.0]]);
-
-// t=18: 散射加剧
-score.add([18.0, [\s_new, \pm_dissolve, 1021, 0, 0,
-    \freq, 660, \amp, 0.18, \density, 14, \pan, 0.2]]);
-
-// t=20: 水面残响消散
-score.add([20.0, [\s_new, \pm_water, 1004, 0, 0,
-    \freq, 41, \amp, 0.08, \breathRate, 0.08, \pan, 0.0,
-    \atk, 1.0, \sus, 4.0, \rel, 6.0]]);
-
-// t=22: 高频散射（意识碎片化）
-score.add([22.0, [\s_new, \pm_dissolve, 1022, 0, 0,
-    \freq, 1200, \amp, 0.12, \density, 20, \pan, -0.3]]);
-
-// t=25: 最后的月光
-score.add([25.0, [\s_new, \pm_moon, 1030, 0, 0,
-    \freq, 2216, \amp, 0.05, \rate, 0.12, \pan, 0.0]]);
-
-// end
-score.add([30.0, [0]]);
-
-score.saveToFile("/home/pinkmoney/.openclaw/workspace/daily/today.osc");
-score
+score.writeOSCFile("/tmp/pm_score.osc", 0, 30.5);
+"OSC file written".postln;
+0.exit;
 )

@@ -25,3 +25,39 @@ ffmpeg 合并视频+音频 → today_final.mp4
 [00:48] STEP 6 - GitHub push
 仓库：https://github.com/Loongint/pinkmoney_AV_Daily
 路径：2026-03-15/
+[01:17:28] START
+date:2026-03-15  theme:在消亡的月光里，意识划破历史的刃  duration:30s
+
+[01:17:28] STEP - 音频渲染
+scsynth NRT  osc=/tmp/pm_score.osc
+
+[01:17:28] STEP - 音频完成
+状态:✅  大小:5254KB  耗时:0s
+
+[01:17:28] STEP - 视频渲染
+1920x1080 30s @ 30fps
+
+[01:24:12] START
+date:2026-03-15  theme:在消亡的月光里，意识划破历史的刃  duration:30s
+
+[01:24:12] STEP - 音频渲染
+scsynth NRT  osc=/tmp/pm_score.osc
+
+[01:24:13] STEP - 音频完成
+状态:✅  大小:5254KB  耗时:0s
+
+[01:24:13] STEP - 视频渲染
+1920x1080 30s @ 30fps
+
+[01:32:29] STEP - 视频完成
+状态:✅  大小:28280KB  耗时:497s
+
+[01:32:29] STEP - Notion存档
+主题:在消亡的月光里，意识划破历史的刃
+
+[01:32:38] STEP - Notion失败
+401: {"object":"error","status":401,"code":"unauthorized","message":"API token is invalid.","request_id":"6e3a0f4e-1eb7-4ecd-9217-234e1b101f6c"}
+
+[01:32:38] STEP - GitHub push
+2026-03-15/
+
