@@ -33,7 +33,21 @@ def log(step, content):
         f.write(entry)
     notify(f"[{ts}] {step}\n{content}")
 
-def render_audio(osc_path, wav_path, duration=30):
+def fix_sc_nrt(sc_path):
+    import re
+    code = Path(sc_path).read_text()
+    if '.add;' not in code:
+        return
+    def to_d_recv(m):
+        block = re.sub(r'\s*\}\s*\)\s*\.add\s*;$', '}).asBytes', m.group(1).rstrip())
+        return f'score.add([0.0, ["/d_recv", {block}]]);'
+    fixed = re.sub(r'(SynthDef\(.*?\}\s*\)\s*\.add\s*;)', to_d_recv, code, flags=re.DOTALL)
+    Path(sc_path).write_text(fixed)
+    log("STEP - SC修复", "SynthDef .add → d_recv 自动转换完成")
+
+def render_audio(osc_path, wav_path, sc_path=None, duration=30):
+    if sc_path:
+        fix_sc_nrt(sc_path)
     log("STEP - 音频渲染", f"scsynth NRT  osc={osc_path}")
     t0 = time.time()
     subprocess.run(
@@ -135,7 +149,7 @@ def run(theme, glsl_code, sc_code, osc_path=None, duration=30):
     glsl_path.write_text(glsl_code)
     sc_path.write_text(sc_code)
 
-    audio_ok = render_audio(osc_path, wav_path, duration) if osc_path else False
+    audio_ok = render_audio(osc_path, wav_path, sc_path, duration) if osc_path else False
     render_video(glsl_path, sc_path,
                  osc_path if audio_ok else None,
                  wav_path if audio_ok else None,
