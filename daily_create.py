@@ -347,6 +347,31 @@ def post_instagram(mp4_path, caption):
         log("STEP - Instagram失败", str(e)[:200])
         return ""
 
+def post_weibo(mp4_path, text):
+    """用 Playwright 发带视频的微博"""
+    log("STEP - 微博发布", str(mp4_path))
+    session_file = os.environ.get("WEIBO_SESSION_FILE", "/mnt/c/Users/PC/weibo_session.json")
+    if not Path(session_file).exists():
+        log("STEP - 微博跳过", f"session 文件不存在: {session_file}")
+        return ""
+    try:
+        result = subprocess.run(
+            ["python3", str(WORKSPACE / "post_weibo.py"), "--video", str(mp4_path), "--text", text],
+            capture_output=True, text=True, timeout=300
+        )
+        url = ""
+        for line in result.stdout.strip().splitlines():
+            if line.startswith("result:"):
+                url = line.replace("result:", "").strip()
+        if url:
+            log("STEP - 微博完成", f"✅ {url}")
+        else:
+            log("STEP - 微博失败", (result.stdout + result.stderr)[-300:])
+        return url
+    except Exception as e:
+        log("STEP - 微博失败", str(e)[:200])
+        return ""
+
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     t_start = time.time()
@@ -378,7 +403,11 @@ def post_instagram(mp4_path, caption):
     ig_caption = post_text + "\n\n#glsl #supercollider #audiovisual #livecoding #generativeart #shaderart"
     ig_url = post_instagram(mp4_path, ig_caption)
 
-    log("DONE", f"✅ 总耗时:{time.time()-t_start:.0f}s\n主题:{theme}\nmp4:{mp4_path}\nnotion:{notion_url}\ninstagram:{ig_url}")
+    # 微博发布
+    weibo_text = f"{theme}\n\nGLSL + SuperCollider audiovisual\ngithub.com/Loongint/pinkmoney_AV_Daily\n\n#generativeart #glsl #supercollider #audiovisual"
+    weibo_url = post_weibo(mp4_path, weibo_text)
+
+    log("DONE", f"✅ 总耗时:{time.time()-t_start:.0f}s\n主题:{theme}\nmp4:{mp4_path}\nnotion:{notion_url}\ninstagram:{ig_url}\nweibo:{weibo_url}")
     return str(mp4_path)
 
 if __name__ == "__main__":
