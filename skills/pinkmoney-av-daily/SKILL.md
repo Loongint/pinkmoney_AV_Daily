@@ -49,3 +49,5 @@ score.add([0.0, ["/d_recv", SynthDef(\pm_name, {
 ## 详细参考
 
 环境依赖、目录结构、.env 配置、性能数据 → `references/pipeline.md`
+
+Theme 生成完整方法论（信息层级、内部综合过程、风格要求、自检、去重）→ `references/theme_methodology.md`
