@@ -1,0 +1,27 @@
+[00:18] STEP 1 - 信息收集
+主题：刀刃落下之前，水已成形
+背景：Ides of March（凯撒遇刺纪念日）+ 双鱼座尾声（太阳即将入白羊，水元素溶解临界）
+月相：亏凸月，意识散射与再生的节点
+
+[00:19] STEP 2 - 代码生成
+GLSL: today.frag（水面涟漪+刀刃闪光+意识溶解三段动画，30s）
+SC: today.scd（4个SynthDef：pm_water / pm_blade / pm_moon / pm_dissolve，多层叙事结构）
+
+[00:30] STEP 3 - 音频渲染 (NRT)
+状态：成功
+OSC score：writeOSCFile 生成
+scsynth -N 渲染完成
+文件大小：5.2MB / 30s 44100Hz stereo
+
+[00:33] STEP 4 - 视频渲染
+状态：成功（--no-audio 模式，单独合成音频）
+耗时：约180s（900帧 @ 1920x1080 30fps）
+文件大小：8.5MB
+
+[00:35] STEP 5 - 合成
+ffmpeg 合并视频+音频 → today_final.mp4
+文件大小：9.2MB
+
+[00:48] STEP 6 - GitHub push
+仓库：https://github.com/Loongint/pinkmoney_AV_Daily
+路径：2026-03-15/
