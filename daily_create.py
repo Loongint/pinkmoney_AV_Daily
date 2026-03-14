@@ -219,7 +219,36 @@ def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
     size = Path(mp4_path).stat().st_size // 1024
     log("STEP - 视频完成", f"✅  大小:{size}KB  耗时:{time.time()-t0:.0f}s")
 
-def archive_notion(theme, glsl_code, sc_code):
+def generate_post_text(theme_zh, theme_en, theme_note, glsl_path, github_repo="https://github.com/Loongint/pinkmoney_AV_Daily"):
+    """生成发 post 用的文字，写入 run.log 和 post.txt"""
+    # 基于 theme_note 生成一句话（从 note 提炼出最核心的意象，不超过一行）
+    # 格式：主题(zh/en) - 一句话 - 代码链接
+    date_path = Path(glsl_path).parent.name  # e.g. 2026-03-15
+    glsl_url  = f"{github_repo}/blob/main/{date_path}/{Path(glsl_path).name}"
+    sc_name   = Path(glsl_path).name.replace(".frag", ".scd")
+    sc_url    = f"{github_repo}/blob/main/{date_path}/{sc_name}"
+
+    # 从 theme_note 里提炼一句话核心意象（取第一个分号/逗号前的部分，保持诗意）
+    note_clean = theme_note.strip().rstrip(".")
+    # 取前半句，精炼到 10-15 词以内
+    sentence = note_clean.split(";")[0].split(",")[0].strip()
+    # 首字母大写
+    sentence = sentence[0].upper() + sentence[1:] if sentence else note_clean
+
+    post = (
+        f"{theme_zh} / {theme_en}\n"
+        f"— {sentence}\n"
+        f"\n"
+        f"glsl → {glsl_url}\n"
+        f"sc   → {sc_url}"
+    )
+
+    post_path = Path(glsl_path).parent / "post.txt"
+    post_path.write_text(post, encoding="utf-8")
+    log("STEP 4.5 - Post文字", f"\n{post}")
+    return post
+
+
     log("STEP - Notion存档", f"主题:{theme}")
     if not NOTION_TOKEN:
         log("STEP - Notion跳过", "NOTION_TOKEN 未设置")

@@ -68,7 +68,31 @@ Theme note: <紧凑英文制作提示，给 GLSL 和 SC 用>
 - 无任何注释行
 写到 YYYY-MM-DD/YYYY-MM-DD.scd
 
-## STEP 5 — 渲染全流程
+## STEP 4.5 — 生成 Post 文字
+渲染完成后，调用 generate_post_text() 生成发帖文字：
+
+```python
+from daily_create import generate_post_text
+post = generate_post_text(
+    theme_zh="消散前的振型",
+    theme_en="Mode Shape Before Dissolution",
+    theme_note="...",  # 今日 theme note
+    glsl_path="2026-03-15/2026-03-15.frag"
+)
+```
+
+输出格式：
+```
+消散前的振型 / Mode Shape Before Dissolution
+— Waning moon, pipeline speaks at spring's edge
+
+glsl → https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/2026-03-15/2026-03-15.frag
+sc   → https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/2026-03-15/2026-03-15.scd
+```
+
+文字同时写入 YYYY-MM-DD/post.txt 和 run.log。
+
+
 用 exec 执行（daily_create.py 内部自动跑 sclang + scsynth + 视频渲染，每步有 check）：
 ```
 cd /home/pinkmoney/.openclaw/workspace
