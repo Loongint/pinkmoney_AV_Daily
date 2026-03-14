@@ -323,7 +323,31 @@ def push_github(theme):
     check(ok, "GitHub push", result.stderr.strip()[-200:])
     log("STEP - GitHub完成", f"✅ pushed {DATE}/")
 
-def run(theme, glsl_code, sc_code, duration=30):
+def post_instagram(mp4_path, caption):
+    """用 instagrapi 发 Reels 到 Instagram"""
+    log("STEP - Instagram发布", str(mp4_path))
+    sessionid = os.environ.get("INSTAGRAM_SESSIONID", "")
+    if not sessionid:
+        log("STEP - Instagram跳过", "INSTAGRAM_SESSIONID 未设置")
+        return ""
+    try:
+        from instagrapi import Client
+        cl = Client()
+        cl.set_proxy("http://172.27.32.1:7890")
+        session_file = WORKSPACE / ".instagram_session.json"
+        if session_file.exists():
+            cl.load_settings(str(session_file))
+        cl.login_by_sessionid(sessionid)
+        media = cl.clip_upload(str(mp4_path), caption)
+        url = f"https://www.instagram.com/reel/{media.code}"
+        log("STEP - Instagram完成", f"✅ {url}")
+        cl.dump_settings(str(session_file))
+        return url
+    except Exception as e:
+        log("STEP - Instagram失败", str(e)[:200])
+        return ""
+
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     t_start = time.time()
     log("START", f"date:{DATE}  theme:{theme}  duration:{duration}s")
@@ -345,7 +369,16 @@ def run(theme, glsl_code, sc_code, duration=30):
     notion_url = archive_notion(theme, glsl_code, sc_code)
     push_github(theme)
 
-    log("DONE", f"✅ 总耗时:{time.time()-t_start:.0f}s\n主题:{theme}\nmp4:{mp4_path}\nnotion:{notion_url}")
+    post_text = generate_post_text(
+        theme_zh=theme.split(" / ")[0] if " / " in theme else theme,
+        theme_en=theme.split(" / ")[1] if " / " in theme else theme,
+        theme_note=theme,
+        glsl_path=str(glsl_path)
+    )
+    ig_caption = post_text + "\n\n#glsl #supercollider #audiovisual #livecoding #generativeart #shaderart"
+    ig_url = post_instagram(mp4_path, ig_caption)
+
+    log("DONE", f"✅ 总耗时:{time.time()-t_start:.0f}s\n主题:{theme}\nmp4:{mp4_path}\nnotion:{notion_url}\ninstagram:{ig_url}")
     return str(mp4_path)
 
 if __name__ == "__main__":
