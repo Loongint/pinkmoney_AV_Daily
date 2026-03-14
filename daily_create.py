@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import requests
 
-WORKSPACE    = Path("/home/pinkmoney/.openclaw/workspace")
+WORKSPACE    = Path(__file__).resolve().parent
 RENDER_PY    = WORKSPACE / "pinkmoney_render.py"
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
