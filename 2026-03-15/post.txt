@@ -1,5 +1,7 @@
-消散前的振型 / Mode Shape Before Dissolution
-— Waning moon, judgement resonance, pipeline speaks at spring's edge
+无月之判 / Null_Verdict.0
+— Null verdict under moonless sky
 
 glsl → https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/2026-03-15/2026-03-15.frag
 sc   → https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/2026-03-15/2026-03-15.scd
+
+#generativeart #glsl #supercollider #audiovisual #shader
