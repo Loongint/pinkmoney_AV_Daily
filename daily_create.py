@@ -326,20 +326,26 @@ def post_weibo(mp4_path, post_text):
 
 def post_instagram(mp4_path, caption):
     log("STEP - Instagram发布", str(mp4_path))
-    if not os.environ.get("INSTAGRAM_SESSIONID"):
+    sessionid = os.environ.get("INSTAGRAM_SESSIONID", "")
+    if not sessionid:
         log("STEP - Instagram跳过", "INSTAGRAM_SESSIONID 未设置")
         return ""
-    result = subprocess.run(
-        [sys.executable, str(WORKSPACE / "post_instagram.py"),
-         "--video", str(mp4_path), "--caption", caption],
-        capture_output=True, text=True, timeout=300)
-    url = next((l.replace("result:", "").strip()
-                for l in result.stdout.splitlines() if l.startswith("result:")), "")
-    if url:
+    try:
+        from instagrapi import Client
+        cl = Client()
+        cl.set_proxy("http://172.27.32.1:7890")
+        session_file = WORKSPACE / ".instagram_session.json"
+        if session_file.exists():
+            cl.load_settings(str(session_file))
+        cl.login_by_sessionid(sessionid)
+        media = cl.clip_upload(str(Path(mp4_path).resolve()), caption)
+        url = f"https://www.instagram.com/reel/{media.code}"
+        cl.dump_settings(str(session_file))
         log("STEP - Instagram完成", f"✅ {url}")
-    else:
-        log("STEP - Instagram失败", (result.stdout + result.stderr)[-300:])
-    return url
+        return url
+    except Exception as e:
+        log("STEP - Instagram失败", str(e)[:300])
+        return ""
 
 # ─── 主流程 ────────────────────────────────────────────────────
 
