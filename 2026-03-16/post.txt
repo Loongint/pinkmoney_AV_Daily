@@ -1,0 +1,7 @@
+蚀归 / Transit_Archive.v
+— Lunar eclipse geometry over Virgo—precision system executing final write before shadow transit
+
+glsl → https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/2026-03-16/2026-03-16.frag
+sc   → https://github.com/Loongint/pinkmoney_AV_Daily/blob/main/2026-03-16/2026-03-16.scd
+
+#generativeart #glsl #supercollider #audiovisual #shader
