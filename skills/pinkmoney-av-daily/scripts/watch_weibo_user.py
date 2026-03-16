@@ -124,6 +124,7 @@ async def fetch_pending_replies(page, my_uid: str, target_uid: str, state: dict)
             continue
 
         sender_uid = str(c.get("user", {}).get("id", ""))
+        sender_name = str(c.get("user", {}).get("screen_name", ""))
         if sender_uid != target_uid:
             continue
 
@@ -134,12 +135,13 @@ async def fetch_pending_replies(page, my_uid: str, target_uid: str, state: dict)
         post_id = str(status.get("id") or status.get("idstr") or "")
 
         pending.append({
-            "comment_id": comment_id,   # 对方评论 ID（作为 reply_id）
-            "post_id":    post_id,       # 帖子 ID（作为 post_comment 的 post_id）
-            "text":       raw_text,
-            "reply_to":   "",
-            "rootid":     rootid,
-            "url":        f"https://weibo.com/{target_uid}/{rootid}",
+            "comment_id":  comment_id,    # 对方评论 ID（作为 reply_comment_id）
+            "post_id":     post_id,        # 帖子 ID（作为 post_comment 的 post_id）
+            "sender_name": sender_name,    # 对方用户名（用于 @回复前缀）
+            "text":        raw_text,
+            "reply_to":    "",
+            "rootid":      rootid,
+            "url":         f"https://weibo.com/{target_uid}/{rootid}",
         })
 
     return pending
@@ -244,8 +246,10 @@ async def main_async(target_uid: str, my_uid: str, dry_run: bool = False):
             print(f"  回复: {reply}")
 
             if not dry_run:
-                # post_id 是帖子 ID，comment_id 是对方评论 ID（作为 reply_id）
-                ok = await post_comment(page, item["post_id"], reply, reply_id=item["comment_id"])
+                # 加 @回复前缀，让微博前端正确显示嵌套
+                screen_name = item.get("sender_name", "")
+                reply_text = f"回复 @{screen_name} {reply}" if screen_name else reply
+                ok = await post_comment(page, item["post_id"], reply_text, reply_id=item["comment_id"])
                 print(f"  {'✅ 已发' if ok else '❌ 失败'}")
                 if ok:
                     already_replied.add(item["comment_id"])
