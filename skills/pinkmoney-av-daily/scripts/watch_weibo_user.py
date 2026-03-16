@@ -100,38 +100,42 @@ async def fetch_latest_posts(page, uid: str, count: int = 5) -> list[dict]:
 async def fetch_pending_replies(page, my_uid: str, target_uid: str, state: dict) -> list[dict]:
     """
     抓取对方回复了我评论、但我尚未回复的条目。
-    策略：遍历我对 target_uid 帖子的评论，找出被 target_uid 回复但我没有继续回复的。
+    策略：访问 /comment/inbox 页后调用 /ajax/message/cmt，
+    过滤出 target_uid 发来的、我尚未回复的评论。
     """
     replied_key = f"replied_{my_uid}_{target_uid}"
     already_replied = set(state.get(replied_key, []))
     pending = []
 
-    # 抓"@我的评论"通知（mentions type=comment）
-    resp = await weibo_api(page, "https://weibo.com/ajax/statuses/mentions?type=comment&page=1")
-    statuses = resp.get("data", {}).get("statuses", [])
+    # 先访问评论收件箱页（建立正确 referer/session 上下文）
+    await page.goto("https://weibo.com/comment/inbox", timeout=30000)
+    await asyncio.sleep(3)
 
-    for s in statuses:
-        comment_id = str(s.get("id", ""))
+    # 用 fetch 调用 /ajax/message/cmt
+    resp = await page.evaluate("""async () => {
+        const r = await fetch('/ajax/message/cmt', {credentials: 'include'});
+        return await r.json();
+    }""")
+    comments = resp.get("data", {}).get("comments", [])
+
+    for c in comments:
+        comment_id = str(c.get("id", ""))
         if comment_id in already_replied:
             continue
 
-        # 判断是否来自 target_uid
-        user = s.get("user", {})
-        sender_uid = str(user.get("id", ""))
+        sender_uid = str(c.get("user", {}).get("id", ""))
         if sender_uid != target_uid:
             continue
 
-        raw_text = re.sub(r"<[^>]+>", "", s.get("text_raw", s.get("text",""))).strip()
-        # 原评论 context
-        reply_to = s.get("reply_comment", {}) or {}
-        reply_to_text = re.sub(r"<[^>]+>", "", reply_to.get("text","")).strip()
+        raw_text = re.sub(r"<[^>]+>", "", c.get("text", "")).strip()
+        rootid = str(c.get("rootid", ""))
 
         pending.append({
             "comment_id": comment_id,
             "text":       raw_text,
-            "reply_to":   reply_to_text,
-            "rootid":     str(s.get("rootid", "")),
-            "url":        f"https://weibo.com/{target_uid}/detail/{s.get('rootid','')}",
+            "reply_to":   "",
+            "rootid":     rootid,
+            "url":        f"https://weibo.com/{target_uid}/{rootid}",
         })
 
     return pending
