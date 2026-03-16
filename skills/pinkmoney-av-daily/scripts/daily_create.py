@@ -123,6 +123,68 @@ def gather_world_signals():
 
 # ─── 渲染 ──────────────────────────────────────────────────────
 
+def _fix_sc_hf_clipping(sc_path) -> bool:
+    """
+    检测 SC 代码中的高频过载来源，自动修复：
+    1. WhiteNoise → PinkNoise（激励源降频）
+    2. Mix.ar([...]) 后添加 * 0.3 限幅
+    3. 增加 RLPF/LPF 截止频率降低
+    4. 添加 Limiter.ar
+    返回 True 表示代码有修改。
+    """
+    code = Path(sc_path).read_text()
+    original = code
+
+    # 1. WhiteNoise → PinkNoise（高频能量减半）
+    code = re.sub(r'\bWhiteNoise\.ar\(([^)]+)\)', r'PinkNoise.ar(\1)', code)
+
+    # 2. Klank 激励振幅缩小（0.006 → 0.003，0.01 → 0.005 等）
+    def scale_klank_amp(m):
+        val = float(m.group(1))
+        return f'PinkNoise.ar({val * 0.5:.4f})'
+    code = re.sub(r'PinkNoise\.ar\((0\.\d+)\)', scale_klank_amp, code)
+
+    # 3. 在 SynthDef 内 Mix.ar([...]) 后没有乘系数的，加 * 0.35
+    #    匹配 ]) 结尾、后面接 * env 但没有先乘比例系数的情况
+    code = re.sub(
+        r'(\]) \* 0\.\d+\);',   # 已有乘系数，跳过
+        lambda m: m.group(0),
+        code
+    )
+    # 找 Mix.ar([...]) 紧接 * env 的，在中间插 * 0.35
+    code = re.sub(
+        r'(Mix\.ar\(\[.*?\]\))(;\s*\n\s*var sig)',
+        r'\1 * 0.35\2',
+        code, flags=re.DOTALL
+    )
+
+    # 4. RLPF/LPF 截止频率超过 1000Hz 的降低到 700Hz
+    def lower_lpf(m):
+        freq = float(m.group(2))
+        if freq > 1000:
+            return f'{m.group(1)}{700}'
+        return m.group(0)
+    code = re.sub(r'(RLPF\.ar\(sig,\s*)([\d.]+)', lower_lpf, code)
+    code = re.sub(r'(LPF\.ar\(sig,\s*)([\d.]+)', lower_lpf, code)
+
+    # 5. 在 Out.ar 前没有 Limiter 的 SynthDef 里加 Limiter
+    #    匹配 sig = FreeVerb... 或最后一个 sig = ... 后、Out.ar 前
+    code = re.sub(
+        r'(sig = (?:FreeVerb|RLPF|LPF|Limiter)\.ar\([^;]+\);)(\s*Out\.ar)',
+        lambda m: m.group(0) if 'Limiter' in m.group(1) else
+                  m.group(1) + '\n    sig = Limiter.ar(sig, 0.6);' + m.group(2),
+        code
+    )
+
+    changed = code != original
+    if changed:
+        Path(sc_path).write_text(code)
+        log("SC高频修复", "✅ WhiteNoise→PinkNoise + 振幅缩减 + Limiter")
+    else:
+        log("SC高频修复", "⚠️ 未找到可自动修复的高频过载来源")
+    return changed
+
+
 def fix_sc_nrt(sc_path):
     code = Path(sc_path).read_text()
     changed = False
@@ -165,7 +227,7 @@ def render_audio(osc_path, sc_path, wav_path, duration=30):
     max_db  = float(max_vol.group(1)) if max_vol else -99
     check(max_db > -80, f"音频有声音 (max: {max_db}dB)", "scsynth 渲染出静音，检查 SynthDef")
 
-    # ── 检测 true peak & loudness，自动修复 clipping ──
+    # ── 检测 true peak & loudness ──
     tp_result = subprocess.run(
         ["ffmpeg", "-i", str(wav_path), "-af", "loudnorm=print_format=json", "-f", "null", "/dev/null"],
         capture_output=True, text=True
@@ -175,8 +237,62 @@ def render_audio(osc_path, sc_path, wav_path, duration=30):
     true_peak = float(tp_match.group(1)) if tp_match else max_db
     loudness  = float(li_match.group(1)) if li_match else -99
 
+    # ── 检测高频 clipping（4kHz 以上 mean > -20dB 视为高频过载）──
+    hf_result = subprocess.run(
+        ["ffmpeg", "-i", str(wav_path), "-af", "highpass=f=4000,volumedetect", "-f", "null", "/dev/null"],
+        capture_output=True, text=True
+    )
+    hf_mean_m = re.search(r"mean_volume:\s*([-\d.]+)", hf_result.stderr)
+    hf_max_m  = re.search(r"max_volume:\s*([-\d.]+)",  hf_result.stderr)
+    hf_mean = float(hf_mean_m.group(1)) if hf_mean_m else -99
+    hf_max  = float(hf_max_m.group(1))  if hf_max_m  else -99
+    log("STEP - 高频电平检测", f"4kHz+ mean={hf_mean}dB  max={hf_max}dB  true_peak={true_peak}dB  LUFS={loudness}")
+
+    hf_clipping = hf_mean > -20.0   # 高频均值 > -20dB 判定为高频过载/clipping
+
+    if hf_clipping:
+        # 高频 clipping：SC 渲染已 clip，需重新修复 SC 代码并重渲染
+        log("STEP - 高频过载检测", f"⚠️ 4kHz+ mean={hf_mean}dB，尝试修复 SC 代码并重渲染")
+        fixed = _fix_sc_hf_clipping(sc_path)
+        if fixed:
+            # 重新生成 OSC
+            env2 = os.environ.copy(); env2["QT_QPA_PLATFORM"] = "offscreen"
+            subprocess.run(["sclang", str(sc_path)], env=env2, timeout=180, capture_output=True)
+            if Path(osc_path).exists():
+                subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i",
+                                "anullsrc=r=44100:cl=stereo", "-t", str(duration + 0.5),
+                                "/tmp/pm_silent.wav"], capture_output=True)
+                subprocess.run(["scsynth", "-N", str(osc_path), "/tmp/pm_silent.wav", str(wav_path),
+                                "44100", "wav", "int16", "-o", "2"],
+                               timeout=120, capture_output=True)
+                # 重新检测
+                hf2 = subprocess.run(
+                    ["ffmpeg", "-i", str(wav_path), "-af", "highpass=f=4000,volumedetect", "-f", "null", "/dev/null"],
+                    capture_output=True, text=True)
+                hf2_mean_m = re.search(r"mean_volume:\s*([-\d.]+)", hf2.stderr)
+                hf2_mean = float(hf2_mean_m.group(1)) if hf2_mean_m else -99
+                log("STEP - 高频重渲染结果", f"4kHz+ mean={hf2_mean}dB")
+                hf_clipping = hf2_mean > -20.0
+            else:
+                log("STEP - 高频修复失败", "重新生成 OSC 失败，跳过重渲染")
+
+    if hf_clipping:
+        # 重渲染仍不达标，或修复失败：降噪后处理兜底
+        log("STEP - 高频兜底处理", f"⚠️ 重渲染后仍 mean={hf_mean}dB，执行后处理降噪")
+        rescue_path = Path(str(wav_path).replace(".wav", "_rescue.wav"))
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(wav_path),
+             "-af", "equalizer=f=5000:t=h:w=2000:g=-14,equalizer=f=8000:t=h:w=3000:g=-24,"
+                    "lowpass=f=10000:poles=2,loudnorm=I=-14:TP=-1:LRA=11",
+             "-ar", "44100", "-ac", "2", str(rescue_path)],
+            capture_output=True, timeout=60)
+        if rescue_path.exists() and rescue_path.stat().st_size > 10000:
+            import shutil; shutil.move(str(rescue_path), str(wav_path))
+            log("STEP - 高频兜底完成", "✅ EQ 降噪后处理完成")
+        _tg_alert(f"⚠️ 音频高频过载（4kHz+ mean={hf_mean}dB），已兜底处理\n日期:{DATE}\n建议检查 SC 代码中的 WhiteNoise/Klank 组合")
+
     if true_peak > -1.0:
-        # 音频超载，自动 normalize 到 -14 LUFS / -1 dBTP
+        # 整体超载，normalize
         log("STEP - 音频超载修复", f"⚠️ true_peak={true_peak}dB LUFS={loudness} → 自动 normalize")
         norm_path = Path(str(wav_path).replace(".wav", "_norm.wav"))
         norm_result = subprocess.run(
@@ -192,10 +308,10 @@ def render_audio(osc_path, sc_path, wav_path, duration=30):
         else:
             log("STEP - 音频修复失败", norm_result.stderr[-200:])
             _tg_alert(f"⚠️ 音频超载且 normalize 失败\n日期:{DATE}\ntrue_peak={true_peak}dB")
-    else:
+    elif not hf_clipping:
         log("STEP - 音频电平正常", f"true_peak={true_peak}dB  LUFS={loudness}")
 
-    log("STEP - 音频完成", f"✅  大小:{Path(wav_path).stat().st_size//1024}KB  max:{max_db}dB  peak:{true_peak}dB  耗时:{time.time()-t0:.0f}s")
+    log("STEP - 音频完成", f"✅  大小:{Path(wav_path).stat().st_size//1024}KB  max:{max_db}dB  peak:{true_peak}dB  hf_mean:{hf_mean}dB  耗时:{time.time()-t0:.0f}s")
 
 def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
     check(Path(glsl_path).exists(), f"GLSL文件存在: {glsl_path}")
