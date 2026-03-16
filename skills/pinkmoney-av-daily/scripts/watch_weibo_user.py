@@ -130,8 +130,12 @@ async def fetch_pending_replies(page, my_uid: str, target_uid: str, state: dict)
         raw_text = re.sub(r"<[^>]+>", "", c.get("text", "")).strip()
         rootid = str(c.get("rootid", ""))
 
+        status = c.get("status", {})
+        post_id = str(status.get("id") or status.get("idstr") or "")
+
         pending.append({
-            "comment_id": comment_id,
+            "comment_id": comment_id,   # 对方评论 ID（作为 reply_id）
+            "post_id":    post_id,       # 帖子 ID（作为 post_comment 的 post_id）
             "text":       raw_text,
             "reply_to":   "",
             "rootid":     rootid,
@@ -240,9 +244,8 @@ async def main_async(target_uid: str, my_uid: str, dry_run: bool = False):
             print(f"  回复: {reply}")
 
             if not dry_run:
-                # rootid 是帖子 ID，comment_id 是对方评论 ID（作为 reply_id）
-                rootid = item.get("rootid") or item["comment_id"]
-                ok = await post_comment(page, rootid, reply, reply_id=item["comment_id"])
+                # post_id 是帖子 ID，comment_id 是对方评论 ID（作为 reply_id）
+                ok = await post_comment(page, item["post_id"], reply, reply_id=item["comment_id"])
                 print(f"  {'✅ 已发' if ok else '❌ 失败'}")
                 if ok:
                     already_replied.add(item["comment_id"])
