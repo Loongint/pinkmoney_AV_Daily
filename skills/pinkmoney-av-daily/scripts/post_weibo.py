@@ -144,9 +144,11 @@ async def post_video(video_path: str, title: str, text: str, screenshot_dir: str
             return b ? b.offsetParent !== null : false;
         }''')
         if again_visible:
-            print("[Weibo] \u2705 \u53d1\u5e03\u6210\u529f\uff01")
+            print("[Weibo] ✅ 发布成功！")
+            # 抓真实帖子 URL：访问主页，取最新一条视频帖子
+            real_url = await _fetch_latest_weibo_url(ctx)
             await browser.close()
-            return "https://weibo.com/upload/channel#done"
+            return real_url or "https://weibo.com/upload/channel#done"
 
         # 处理其他确认弹窗（不含"再发一条视频"）
         for _ in range(5):
@@ -169,15 +171,49 @@ async def post_video(video_path: str, title: str, text: str, screenshot_dir: str
                     return b ? b.offsetParent !== null : false;
                 }''')
                 if again:
-                    print("[Weibo] \u2705 \u53d1\u5e03\u6210\u529f\uff01")
+                    print("[Weibo] ✅ 发布成功！")
+                    real_url = await _fetch_latest_weibo_url(ctx)
                     await browser.close()
-                    return "https://weibo.com/upload/channel#done"
+                    return real_url or "https://weibo.com/upload/channel#done"
             await asyncio.sleep(1)
 
         print(f"[Weibo] URL: {page.url}")
 
         await browser.close()
         return page.url
+
+
+async def _fetch_latest_weibo_url(ctx) -> str:
+    """发布成功后，访问主页取最新一条帖子的真实 URL"""
+    import re
+    try:
+        page2 = await ctx.new_page()
+        # 先用 API 接口拿自己的 uid，再取最新微博
+        await page2.goto("https://weibo.com/ajax/profile/me", timeout=15000)
+        await asyncio.sleep(1)
+        me_text = await page2.evaluate("() => document.body.innerText")
+        uid_match = re.search(r'"id"\s*:\s*(\d+)', me_text)
+        if not uid_match:
+            await page2.close()
+            return ""
+        uid = uid_match.group(1)
+        print(f"[Weibo] uid={uid}，拉取最新帖子...")
+        await page2.goto(
+            f"https://weibo.com/ajax/statuses/mymblog?uid={uid}&page=1&feature=0",
+            timeout=15000
+        )
+        await asyncio.sleep(1)
+        feed_text = await page2.evaluate("() => document.body.innerText")
+        mid_match = re.search(r'"id"\s*:\s*"?(\d{16,})"?', feed_text)
+        await page2.close()
+        if mid_match:
+            mid = mid_match.group(1)
+            url = f"https://weibo.com/{uid}/{mid}"
+            print(f"[Weibo] 真实帖子 URL: {url}")
+            return url
+    except Exception as e:
+        print(f"[Weibo] 获取真实 URL 失败: {e}")
+    return ""
 
 def main():
     parser = argparse.ArgumentParser()

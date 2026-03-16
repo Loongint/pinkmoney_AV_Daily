@@ -169,6 +169,8 @@ def render_audio(osc_path, sc_path, wav_path, duration=30):
 def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
     check(Path(glsl_path).exists(), f"GLSL文件存在: {glsl_path}")
     check(Path(sc_path).exists(),   f"SC文件存在: {sc_path}")
+    # wav 必须存在且有声，否则直接 fail，不生成无声视频
+    check(wav_path and Path(wav_path).exists(), f"WAV文件存在: {wav_path}")
     log("STEP - 视频渲染", f"1920x1080 {duration}s @ 30fps")
     t0  = time.time()
     cmd = [sys.executable, str(RENDER_PY),
@@ -211,6 +213,8 @@ def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
         max_db  = float(max_vol.group(1)) if max_vol else -99
         check(max_db > -80, f"合并后音频有声 (max: {max_db}dB)")
         Path(merged).rename(mp4_path)
+    else:
+        check(False, "合并音频失败：WAV 文件不存在，中止流程")
 
     log("STEP - 视频完成", f"✅  大小:{Path(mp4_path).stat().st_size//1024}KB  耗时:{time.time()-t0:.0f}s")
 
@@ -288,21 +292,66 @@ def push_github(theme):
 
 # ─── 发布（三渠道）─────────────────────────────────────────────
 
+def _tg_alert(msg: str):
+    """发 TG 告警，不抛异常"""
+    import urllib.request, urllib.parse
+    token = os.environ.get("TG_BOT_TOKEN", "")
+    chat  = os.environ.get("TG_CHAT_ID", "")
+    if not token or not chat:
+        return
+    try:
+        data = urllib.parse.urlencode({"chat_id": chat, "text": msg}).encode()
+        urllib.request.urlopen(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=data, timeout=10
+        )
+    except Exception:
+        pass
+
+
+def _run_publisher(cmd: list, name: str, timeout: int = 300) -> tuple[int, str, str]:
+    """运行发布子进程，返回 (returncode, stdout, stderr)"""
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    return result.returncode, result.stdout, result.stderr
+
+
+def _check_xhs_success(stdout: str) -> bool:
+    return "success" in stdout.lower() or "result:" in stdout
+
+
+def _check_weibo_success(stdout: str) -> tuple[bool, str]:
+    url = next((l.replace("result:", "").strip()
+                for l in stdout.splitlines() if l.startswith("result:")), "")
+    ok = bool(url) and "#done" not in url or "weibo.com" in url
+    return ok, url
+
+
+def _check_ig_success(url: str) -> bool:
+    return bool(url) and "instagram.com/reel/" in url
+
+
 def post_xhs(mp4_path, theme_zh, theme_en, post_text):
     log("STEP - 小红书发布", str(mp4_path))
     title = f"Daily Audiovisual Livecoding - {datetime.now().strftime('%y/%m/%d')}"
-    # post_text 第一行已是 "theme_zh / theme_en"，直接用，只换 hashtag
-    body = "\n\n".join(post_text.split("\n\n")[1:])  # 去掉第一段（标题行）
+    body  = "\n\n".join(post_text.split("\n\n")[1:])
     text  = f"{theme_zh} / {theme_en}\n\n{body}\n\n#audiovisual #livecoding #glsl #supercollider #pinkmoney"
-    result = subprocess.run(
-        [sys.executable, str(WORKSPACE / "post_xhs.py"),
-         "--video", str(mp4_path), "--title", title, "--text", text,
-         "--screenshot-dir", str(OUT_DIR)],
-        capture_output=True, text=True, timeout=300)
-    if result.returncode == 0:
-        log("STEP - 小红书完成", f"✅\n{result.stdout[-200:]}")
-    else:
-        log("STEP - 小红书失败", f"returncode={result.returncode}\n{result.stderr[-300:]}")
+    cmd   = [sys.executable, str(WORKSPACE / "post_xhs.py"),
+             "--video", str(mp4_path), "--title", title, "--text", text,
+             "--screenshot-dir", str(OUT_DIR)]
+
+    for attempt in range(2):
+        rc, stdout, stderr = _run_publisher(cmd, "小红书")
+        if rc == 0 and _check_xhs_success(stdout):
+            log("STEP - 小红书完成", f"✅\n{stdout[-200:]}")
+            return
+        err = (stdout + stderr)[-300:]
+        log("STEP - 小红书失败", f"attempt={attempt+1} rc={rc}\n{err}")
+        if attempt == 0:
+            log("STEP - 小红书重试", "等待 60s 后重试...")
+            time.sleep(60)
+
+    _tg_alert(f"⚠️ 小红书发布失败（2次重试后）\n日期:{DATE}\n错误:{err[-150:]}")
+
 
 def post_weibo(mp4_path, post_text):
     log("STEP - 微博发布", str(mp4_path))
@@ -310,19 +359,26 @@ def post_weibo(mp4_path, post_text):
     if not Path(session_file).exists():
         log("STEP - 微博跳过", f"session 文件不存在: {session_file}")
         return ""
-    result = subprocess.run(
-        [sys.executable, str(WORKSPACE / "post_weibo.py"),
-         "--video", str(mp4_path),
-         "--title", post_text.split("\n")[0][:30],
-         "--text",  post_text],
-        capture_output=True, text=True, timeout=300)
-    url = next((l.replace("result:", "").strip()
-                for l in result.stdout.splitlines() if l.startswith("result:")), "")
-    if url:
-        log("STEP - 微博完成", f"✅ {url}")
-    else:
-        log("STEP - 微博失败", (result.stdout + result.stderr)[-300:])
-    return url
+    cmd = [sys.executable, str(WORKSPACE / "post_weibo.py"),
+           "--video", str(mp4_path),
+           "--title", post_text.split("\n")[0][:30],
+           "--text",  post_text]
+
+    for attempt in range(2):
+        rc, stdout, stderr = _run_publisher(cmd, "微博")
+        ok, url = _check_weibo_success(stdout)
+        if ok:
+            log("STEP - 微博完成", f"✅ {url}")
+            return url
+        err = (stdout + stderr)[-300:]
+        log("STEP - 微博失败", f"attempt={attempt+1} rc={rc}\n{err}")
+        if attempt == 0:
+            log("STEP - 微博重试", "等待 60s 后重试...")
+            time.sleep(60)
+
+    _tg_alert(f"⚠️ 微博发布失败（2次重试后）\n日期:{DATE}\n错误:{err[-150:]}")
+    return ""
+
 
 def post_instagram(mp4_path, caption):
     log("STEP - Instagram发布", str(mp4_path))
@@ -330,24 +386,34 @@ def post_instagram(mp4_path, caption):
     if not sessionid:
         log("STEP - Instagram跳过", "INSTAGRAM_SESSIONID 未设置")
         return ""
-    try:
-        from instagrapi import Client
-        cl = Client()
-        cl.set_proxy("http://172.27.32.1:7890")
-        session_file = WORKSPACE / ".instagram_session.json"
-        if session_file.exists():
-            cl.load_settings(str(session_file))
-        else:
-            log("STEP - Instagram跳过", "session 文件不存在")
-            return ""
-        media = cl.clip_upload(str(Path(mp4_path).resolve()), caption)
-        url = f"https://www.instagram.com/reel/{media.code}"
-        cl.dump_settings(str(session_file))
-        log("STEP - Instagram完成", f"✅ {url}")
-        return url
-    except Exception as e:
-        log("STEP - Instagram失败", str(e)[:300])
-        return ""
+
+    for attempt in range(2):
+        try:
+            from instagrapi import Client
+            cl = Client()
+            cl.set_proxy("http://172.27.32.1:7890")
+            session_file = WORKSPACE / ".instagram_session.json"
+            if session_file.exists():
+                cl.load_settings(str(session_file))
+            else:
+                log("STEP - Instagram跳过", "session 文件不存在")
+                return ""
+            media = cl.clip_upload(str(Path(mp4_path).resolve()), caption)
+            url = f"https://www.instagram.com/reel/{media.code}"
+            cl.dump_settings(str(session_file))
+            if _check_ig_success(url):
+                log("STEP - Instagram完成", f"✅ {url}")
+                return url
+            raise ValueError(f"返回 URL 异常: {url}")
+        except Exception as e:
+            err = str(e)[:300]
+            log("STEP - Instagram失败", f"attempt={attempt+1}\n{err}")
+            if attempt == 0:
+                log("STEP - Instagram重试", "等待 60s 后重试...")
+                time.sleep(60)
+
+    _tg_alert(f"⚠️ Instagram发布失败（2次重试后）\n日期:{DATE}\n错误:{err[-150:]}")
+    return ""
 
 # ─── 主流程 ────────────────────────────────────────────────────
 
