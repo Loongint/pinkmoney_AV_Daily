@@ -164,7 +164,38 @@ def render_audio(osc_path, sc_path, wav_path, duration=30):
     max_vol = re.search(r"max_volume:\s*([-\d.]+)", vol.stderr)
     max_db  = float(max_vol.group(1)) if max_vol else -99
     check(max_db > -80, f"音频有声音 (max: {max_db}dB)", "scsynth 渲染出静音，检查 SynthDef")
-    log("STEP - 音频完成", f"✅  大小:{Path(wav_path).stat().st_size//1024}KB  max:{max_db}dB  耗时:{time.time()-t0:.0f}s")
+
+    # ── 检测 true peak & loudness，自动修复 clipping ──
+    tp_result = subprocess.run(
+        ["ffmpeg", "-i", str(wav_path), "-af", "loudnorm=print_format=json", "-f", "null", "/dev/null"],
+        capture_output=True, text=True
+    )
+    tp_match = re.search(r'"input_tp"\s*:\s*"([-\d.]+)"', tp_result.stderr + tp_result.stdout)
+    li_match = re.search(r'"input_i"\s*:\s*"([-\d.]+)"',  tp_result.stderr + tp_result.stdout)
+    true_peak = float(tp_match.group(1)) if tp_match else max_db
+    loudness  = float(li_match.group(1)) if li_match else -99
+
+    if true_peak > -1.0:
+        # 音频超载，自动 normalize 到 -14 LUFS / -1 dBTP
+        log("STEP - 音频超载修复", f"⚠️ true_peak={true_peak}dB LUFS={loudness} → 自动 normalize")
+        norm_path = Path(str(wav_path).replace(".wav", "_norm.wav"))
+        norm_result = subprocess.run(
+            ["ffmpeg", "-y", "-i", str(wav_path),
+             "-af", "loudnorm=I=-14:TP=-1:LRA=11:print_format=quiet",
+             str(norm_path)],
+            capture_output=True, text=True, timeout=60
+        )
+        if norm_path.exists() and norm_path.stat().st_size > 10000:
+            import shutil
+            shutil.move(str(norm_path), str(wav_path))
+            log("STEP - 音频修复完成", f"✅ normalize 完成 → -14 LUFS / -1 dBTP")
+        else:
+            log("STEP - 音频修复失败", norm_result.stderr[-200:])
+            _tg_alert(f"⚠️ 音频超载且 normalize 失败\n日期:{DATE}\ntrue_peak={true_peak}dB")
+    else:
+        log("STEP - 音频电平正常", f"true_peak={true_peak}dB  LUFS={loudness}")
+
+    log("STEP - 音频完成", f"✅  大小:{Path(wav_path).stat().st_size//1024}KB  max:{max_db}dB  peak:{true_peak}dB  耗时:{time.time()-t0:.0f}s")
 
 def render_video(glsl_path, sc_path, wav_path, mp4_path, duration=30):
     check(Path(glsl_path).exists(), f"GLSL文件存在: {glsl_path}")
