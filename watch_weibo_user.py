@@ -156,7 +156,7 @@ async def post_comment(page, post_id: str, comment_text: str, reply_id: str = ""
         formData.append("comment", {json.dumps(comment_text)});
         formData.append("mid", "{post_id}");
         formData.append("st", xsrf);
-        {"formData.append('reply_id', '" + reply_id + "');" if reply_id else ""}
+        {"formData.append('reply_comment_id', '" + reply_id + "'); formData.append('reply_id', '" + reply_id + "');" if reply_id else ""}
         const r = await fetch("https://weibo.com/ajax/comments/create", {{
             method: "POST",
             credentials: "include",
